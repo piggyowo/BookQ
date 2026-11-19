@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 private enum LibraryFilter: String, CaseIterable, Identifiable {
@@ -17,12 +18,24 @@ private enum LibraryFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private enum LibrarySheet: Identifiable {
+    case importer
+    case preview(ParsedBank)
+    case detail(UUID)
+
+    var id: String {
+        switch self {
+        case .importer: return "importer"
+        case .preview(let parsed): return "preview-\(parsed.name)-\(parsed.questions.count)"
+        case .detail(let bankID): return "detail-\(bankID.uuidString)"
+        }
+    }
+}
+
 struct LibraryView: View {
     @EnvironmentObject var store: QuizStore
 
-    @State private var showImporter = false
-    @State private var parsedBank: ParsedBank?
-    @State private var selectedBank: QuizBank?
+    @State private var activeSheet: LibrarySheet?
     @State private var importError: String?
     @State private var loading = false
     @State private var search = ""
@@ -64,25 +77,31 @@ struct LibraryView: View {
                 }
             }
         }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
-            switch result {
-            case .success(let url):
-                showImporter = false
-                importFile(url)
-            case .failure(let error):
-                showImporter = false
-                importError = error.localizedDescription
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .importer:
+                DocumentPickerView(types: importTypes, onPick: { url in
+                    activeSheet = nil
+                    // 等系统选择器完全收起后再开始解析，避免弹层互相抢占。
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        importFile(url)
+                    }
+                }, onCancel: {
+                    activeSheet = nil
+                })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+
+            case .preview(let parsed):
+                ImportPreviewView(parsed: parsed)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+
+            case .detail(let bankID):
+                BankDetailView(bankID: bankID)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
             }
-        }
-        .sheet(item: $parsedBank) { parsed in
-            ImportPreviewView(parsed: parsed)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-        }
-        .sheet(item: $selectedBank) { bank in
-            BankDetailView(bankID: bank.id)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
         }
         .alert("导入失败", isPresented: Binding(
             get: { importError != nil },
@@ -108,7 +127,7 @@ struct LibraryView: View {
             }
             Spacer()
             Button {
-                showImporter = true
+                activeSheet = .importer
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
@@ -146,7 +165,7 @@ struct LibraryView: View {
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
             Button {
-                showImporter = true
+                activeSheet = .importer
             } label: {
                 Text("导入第一份题库")
                     .font(.quizSans(14, weight: .semibold))
@@ -313,7 +332,7 @@ struct LibraryView: View {
     private func bankCard(_ bank: QuizBank) -> some View {
         let progress = store.bankProgress(bank)
         return Button {
-            selectedBank = bank
+            activeSheet = .detail(bank.id)
         } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
@@ -395,7 +414,7 @@ struct LibraryView: View {
 
     private var importCard: some View {
         Button {
-            showImporter = true
+            activeSheet = .importer
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "plus")
@@ -468,7 +487,7 @@ struct LibraryView: View {
                     self.loading = false
                     switch result {
                     case .success(let parsed):
-                        self.parsedBank = parsed
+                        self.activeSheet = .preview(parsed)
                     case .failure(let error):
                         self.importError = error.localizedDescription
                     }
@@ -905,4 +924,47 @@ struct BankDetailView: View {
         formatter.dateFormat = "yyyy.MM.dd"
         return formatter
     }()
+}
+
+// MARK: - 原生文件选择器
+
+/// 使用系统 UIDocumentPicker，并开启 asCopy：
+/// 系统会先把文件复制成 App 自己可读的临时文件，再回调 URL，
+/// 避免 iCloud / 第三方文件提供者的安全作用域 URL 直接读取失败。
+private struct DocumentPickerView: UIViewControllerRepresentable {
+    let types: [UTType]
+    let onPick: (URL) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let onPick: (URL) -> Void
+        private let onCancel: () -> Void
+
+        init(onPick: @escaping (URL) -> Void, onCancel: @escaping () -> Void) {
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { return }
+            onPick(url)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            onCancel()
+        }
+    }
 }

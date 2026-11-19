@@ -106,7 +106,7 @@ struct SettingsView: View {
                 }
 
                 group("关于") {
-                    infoRow(icon: "app.badge", title: "版本", value: "0.1.2")
+                    infoRow(icon: "app.badge", title: "版本", value: "0.1.3")
                     divider
                     infoRow(icon: "shippingbox", title: "题库", value: "全部由你导入")
                     divider
