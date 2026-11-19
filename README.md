@@ -21,8 +21,8 @@ git branch -M main
 git remote add origin https://github.com/<你的账号>/<仓库名>.git
 git push -u origin main
 
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 推送 tag 后，Actions 会在 macOS runner 上编译，并：

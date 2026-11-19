@@ -67,8 +67,10 @@ struct LibraryView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
             switch result {
             case .success(let url):
+                showImporter = false
                 importFile(url)
             case .failure(let error):
+                showImporter = false
                 importError = error.localizedDescription
             }
         }
@@ -431,7 +433,7 @@ struct LibraryView: View {
     // MARK: - 文件选择
 
     private var importTypes: [UTType] {
-        var types: [UTType] = [.plainText, .json]
+        var types: [UTType] = [.plainText, .json, .data]
         if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
         if let markdown = UTType(filenameExtension: "md") { types.append(markdown) }
         return types
@@ -441,22 +443,35 @@ struct LibraryView: View {
         loading = true
         Task.detached(priority: .userInitiated) {
             let access = url.startAccessingSecurityScopedResource()
+            let tempDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("BookQImport-\(UUID().uuidString)", isDirectory: true)
             let result: Result<ParsedBank, Error>
             do {
-                result = .success(try ImportService.parse(url: url))
+                try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                let sourceName = url.lastPathComponent.isEmpty ? "题库.\(url.pathExtension)" : url.lastPathComponent
+                let localURL = tempDir.appendingPathComponent(sourceName)
+                // 文件 App / iCloud 返回的是安全作用域 URL，先复制到本机临时目录再解析，
+                // 避免 ZIPFoundation 直接读外部文件提供者时拿不到数据或卡住。
+                try FileManager.default.copyItem(at: url, to: localURL)
+                result = .success(try ImportService.parse(url: localURL))
             } catch {
-                result = .failure(error)
+                result = .failure(ImportService.ImportError.unreadable("读取所选文件失败：\(error.localizedDescription)"))
             }
+            try? FileManager.default.removeItem(at: tempDir)
             if access {
                 url.stopAccessingSecurityScopedResource()
             }
+
             await MainActor.run {
-                self.loading = false
-                switch result {
-                case .success(let parsed):
-                    self.parsedBank = parsed
-                case .failure(let error):
-                    self.importError = error.localizedDescription
+                // 等系统文件选择器完全收起后再弹确认页 / 错误框，避免两个展示互相抢占。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    self.loading = false
+                    switch result {
+                    case .success(let parsed):
+                        self.parsedBank = parsed
+                    case .failure(let error):
+                        self.importError = error.localizedDescription
+                    }
                 }
             }
         }
