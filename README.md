@@ -1,4 +1,4 @@
-# 工艺题库 · iOS（SwiftUI）
+# BookQ · iOS（SwiftUI）
 
 「织物靛蓝」题库 App 的**用户导入版**：App 本身不内置任何题目，首次打开是空题库。用户在「题库」页导入 DOCX / TXT / MD / JSON，解析确认后再保存；主页负责开始练习，设置页管理默认偏好与备份。
 
@@ -16,19 +16,19 @@
 ```bash
 git init
 git add .
-git commit -m "CraftQuiz iOS import edition"
+git commit -m "BookQ iOS import edition"
 git branch -M main
 git remote add origin https://github.com/<你的账号>/<仓库名>.git
 git push -u origin main
 
-git tag v1.1.0
-git push origin v1.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 推送 tag 后，Actions 会在 macOS runner 上编译，并：
 
-- 在 Actions 运行页的 Artifacts 里留下 `CraftQuiz-unsigned-ipa`；
-- 自动创建 GitHub Release，附上 `CraftQuiz-unsigned.ipa`。
+- 在 Actions 运行页的 Artifacts 里留下 `BookQ-unsigned-ipa`；
+- 自动创建 GitHub Release，附上 `BookQ-unsigned.ipa`。
 
 也可以在 Actions 页面手动 `Run workflow`，只取 Artifacts。
 
@@ -113,6 +113,6 @@ QuizApp/
 ## 备注
 
 - Bundle ID 默认 `com.tongjie.craftquiz`，若与已有 App 冲突，改 Target 的 `PRODUCT_BUNDLE_IDENTIFIER`。
-- App 显示名是「工艺题库」，在 `QuizApp/Info.plist` 的 `CFBundleDisplayName` 修改。
+- App 显示名是「BookQ」，在 `QuizApp/Info.plist` 的 `CFBundleDisplayName` 修改。
 - DOCX 解析使用 ZIPFoundation 0.9.19（SPM），首次打开 Xcode 需要联网拉取依赖；GitHub Actions 也会自动解析。
 - 本工程未包含 App Store 上架所需的隐私清单、审核素材和正式签名配置。

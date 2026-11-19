@@ -37,10 +37,10 @@ struct HomeView: View {
         HStack(spacing: 11) {
             BrandMark(size: 42)
             VStack(alignment: .leading, spacing: 2) {
-                Text("工艺题库")
+                Text("BookQ")
                     .font(.quizSerif(20))
                     .foregroundColor(Palette.ink)
-                Text("CRAFT QUIZ · 随身练")
+                Text("BOOK Q · 随身练")
                     .font(.quizSans(9, weight: .medium))
                     .tracking(1.4)
                     .foregroundColor(Palette.muted)
@@ -105,7 +105,7 @@ struct HomeView: View {
                         .foregroundColor(Palette.cream)
                         .lineSpacing(3)
 
-                    Text("导入一份 Word 或文本题库，\n把工艺知识装进手机。")
+                    Text("导入一份 Word 或文本题库，\n把题库装进手机。")
                         .font(.quizSans(13.5))
                         .foregroundColor(Palette.cream.opacity(0.72))
                         .lineSpacing(4)

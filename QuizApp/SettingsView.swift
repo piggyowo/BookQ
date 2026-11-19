@@ -106,7 +106,7 @@ struct SettingsView: View {
                 }
 
                 group("关于") {
-                    infoRow(icon: "app.badge", title: "版本", value: "1.0")
+                    infoRow(icon: "app.badge", title: "版本", value: "0.1.1")
                     divider
                     infoRow(icon: "shippingbox", title: "题库", value: "全部由你导入")
                     divider
@@ -133,7 +133,7 @@ struct SettingsView: View {
                 message = error.localizedDescription
             }
         }
-        .fileExporter(isPresented: $showExporter, document: exportDocument, contentType: .json, defaultFilename: "工艺题库备份") { result in
+        .fileExporter(isPresented: $showExporter, document: exportDocument, contentType: .json, defaultFilename: "BookQ备份") { result in
             switch result {
             case .success:
                 store.showToast("备份已导出")
