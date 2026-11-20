@@ -1,6 +1,8 @@
-# BookQ · iOS（SwiftUI）
+# BookQ · iOS + Android
 
 「织物靛蓝」题库 App 的**用户导入版**：App 本身不内置任何题目，首次打开是空题库。用户在「题库」页导入 DOCX / TXT / MD / JSON，解析确认后再保存；主页负责开始练习，设置页管理默认偏好与备份。
+
+同一套设计、题库格式和交互规则现在同时提供 **iOS（SwiftUI）** 与 **Android（Kotlin + Jetpack Compose）** 版本。Android 版为自用安装包，不上架应用商店，使用固定签名，后续版本可直接覆盖升级。
 
 ## 直接运行
 
@@ -9,28 +11,34 @@
 3. 选中 `QuizApp` Target → Signing & Capabilities → Team 选择你的 Apple ID（免费账号即可）。
 4. 选 iPhone 模拟器或真机，Run。
 
-## GitHub Actions 出 IPA
+## GitHub Actions 出 IPA + APK
 
 仓库已带 `.github/workflows/build-ipa.yml`：
 
 ```bash
-git init
-git add .
-git commit -m "BookQ iOS import edition"
-git branch -M main
-git remote add origin https://github.com/<你的账号>/<仓库名>.git
-git push -u origin main
-
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
-推送 tag 后，Actions 会在 macOS runner 上编译，并：
+推送 tag 后，Actions 会同时：
 
-- 在 Actions 运行页的 Artifacts 里留下 `BookQ-unsigned-ipa`；
-- 自动创建 GitHub Release，附上 `BookQ-unsigned.ipa`。
+- 在 macOS `macos-15-intel` runner 上编译 iOS，Artifacts 留下 `BookQ-unsigned-ipa`；
+- 在 Ubuntu runner 上编译 Android，Artifacts 留下 `BookQ-android-apk`；
+- 两个产物都挂到同一个 GitHub Release：`BookQ-unsigned.ipa` + `BookQ-Android-0.1.4.apk`。
 
 也可以在 Actions 页面手动 `Run workflow`，只取 Artifacts。
+
+## Android 构建
+
+```bash
+cd BookQAndroid
+gradle :app:assembleRelease
+```
+
+- 需要 JDK 17、Android SDK 35、Gradle 8.9。
+- 输出：`BookQAndroid/app/build/outputs/apk/release/app-release.apk`。
+- 包名 `com.boocool.bookq`，最低 Android 8.0（API 26）。
+- 签名文件在 `BookQAndroid/keystore/bookq-release.jks`，固定使用，保证后续版本可覆盖安装并保留题库数据。
 
 ### 关于签名
 
@@ -105,6 +113,20 @@ QuizApp/
   QuizView.swift     答题页 + 答题卡
   ResultView.swift   结果页 + 错题本
   Assets.xcassets    AppIcon
+BookQAndroid/
+  app/src/main/java/com/boocool/bookq/
+    MainActivity.kt   入口、底栏、文件选择、BottomSheet
+    Models.kt         题目/题库/模式/结果模型
+    Store.kt          题库管理、答题状态、计分、错题本、持久化
+    ImportService.kt  DOCX/TXT/MD/JSON 解析
+    Theme.kt          织物靛蓝、纸纹、底栏与通用组件
+    HomeScreen.kt     主页
+    LibraryScreen.kt  题库页 + 导入卡
+    SettingsScreen.kt 设置 + 备份恢复
+    Sheets.kt         开始练习 / 导入确认 / 题库详情
+    QuizScreen.kt     答题页 + 答题卡
+    ResultScreen.kt   结果页 + 错题本
+  keystore/bookq-release.jks  固定 Android 签名
 .github/workflows/build-ipa.yml
 ```
 
@@ -112,7 +134,7 @@ QuizApp/
 
 ## 备注
 
-- Bundle ID 默认 `com.tongjie.craftquiz`，若与已有 App 冲突，改 Target 的 `PRODUCT_BUNDLE_IDENTIFIER`。
+- Bundle ID 默认 `com.boocool.craftquiz`，若与已有 App 冲突，改 Target 的 `PRODUCT_BUNDLE_IDENTIFIER`。
 - App 显示名是「BookQ」，在 `QuizApp/Info.plist` 的 `CFBundleDisplayName` 修改。
 - DOCX 解析使用 ZIPFoundation 0.9.19（SPM），首次打开 Xcode 需要联网拉取依赖；GitHub Actions 也会自动解析。
 - 本工程未包含 App Store 上架所需的隐私清单、审核素材和正式签名配置。

@@ -5,3 +5,10 @@ xcuserdata/
 .DS_Store
 Payload/
 *.ipa
+
+# Android
+.gradle/
+local.properties
+*.iml
+.idea/
+**/app/src/test/snapshots/
