@@ -119,7 +119,7 @@ enum BookQPalettes {
 }
 
 enum ThemeRuntime {
-    static var current: BookQPalette = .indigoLight
+    static var current: BookQPalette = BookQPalettes.indigoLight
 
     static func apply(theme: AppTheme, appearance: AppAppearance) {
         current = BookQPalettes.of(theme, appearance)

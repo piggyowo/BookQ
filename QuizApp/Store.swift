@@ -765,6 +765,22 @@ final class QuizStore: ObservableObject {
             theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .indigo
             appearance = try container.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .light
         }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(banks, forKey: .banks)
+            try container.encode(wrong, forKey: .wrong)
+            try container.encode(progress, forKey: .progress)
+            try container.encode(attempts, forKey: .attempts)
+            try container.encode(recentBankIDs, forKey: .recentBankIDs)
+            try container.encode(sequenceCursors, forKey: .sequenceCursors)
+            try container.encode(defaultMode, forKey: .defaultMode)
+            try container.encode(defaultSize, forKey: .defaultSize)
+            try container.encode(defaultOrder, forKey: .defaultOrder)
+            try container.encode(haptics, forKey: .haptics)
+            try container.encode(theme, forKey: .theme)
+            try container.encode(appearance, forKey: .appearance)
+        }
     }
 
     private struct Backup: Codable {
