@@ -169,7 +169,7 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.4"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.5"
     }
 
     // MARK: - 详情页

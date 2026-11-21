@@ -87,14 +87,14 @@ jobs:
 
       - name: Rename APK
         run: |
-          cp BookQAndroid/app/build/outputs/apk/release/app-release.apk BookQ-Android-0.1.4.apk
-          ls -lh BookQ-Android-0.1.4.apk
+          cp BookQAndroid/app/build/outputs/apk/release/app-release.apk BookQ-Android-0.1.5.apk
+          ls -lh BookQ-Android-0.1.5.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: BookQ-android-apk
-          path: BookQ-Android-0.1.4.apk
+          path: BookQ-Android-0.1.5.apk
           if-no-files-found: error
 
   release:
@@ -123,4 +123,4 @@ jobs:
           body_path: .github/release-notes.md
           files: |
             release-assets/BookQ-unsigned.ipa
-            release-assets/BookQ-Android-0.1.4.apk
+            release-assets/BookQ-Android-0.1.5.apk
