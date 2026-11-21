@@ -21,6 +21,7 @@ jobs:
 
       - name: Build app (unsigned)
         run: |
+          set -o pipefail
           xcodebuild \
             -project QuizApp.xcodeproj \
             -scheme QuizApp \
@@ -31,7 +32,17 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee xcodebuild.log
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          {
+            echo "## xcodebuild errors"
+            echo '```'
+            grep -E "error:|BUILD FAILED|The following build commands failed" xcodebuild.log | tail -n 80 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package IPA
         run: |
