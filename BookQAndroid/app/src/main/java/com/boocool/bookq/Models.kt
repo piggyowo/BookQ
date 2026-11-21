@@ -2,6 +2,18 @@ package com.boocool.bookq
 
 import java.util.UUID
 
+
+enum class AppTheme(val title: String, val subtitle: String) {
+    INDIGO("织物靛蓝", "墨蓝布卷 · 黄铜微光"),
+    RUST("茜草暖砂", "暖砂纸 · 茜草红"),
+    MOSS("苔绿青铜", "苔绿 · 青铜刻度")
+}
+
+enum class AppAppearance(val title: String, val subtitle: String) {
+    LIGHT("浅色", "纸张质感最完整"),
+    DARK("深色", "夜间低亮更护眼")
+}
+
 data class Question(
     val id: String,
     val bankId: String,
@@ -134,5 +146,30 @@ data class ParsedBank(
     val noAnswerCount: Int
         get() = questions.count { q ->
             q.answer == null || q.options.none { it.firstOrNull() == q.answer }
+        }
+}
+
+// MARK: - 顺序做题
+
+data class SequenceCursor(
+    val nextQuestionId: String? = null,
+    val completed: Boolean = false
+)
+
+data class SequenceInfo(
+    val total: Int,
+    val nextIndex: Int?,
+    val remaining: Int,
+    val done: Int,
+    val completed: Boolean,
+    val lastNumber: String?
+) {
+    val nextNumber: Int? get() = nextIndex?.plus(1)
+
+    val lastLabel: String
+        get() = when {
+            completed -> "上一轮已完成"
+            lastNumber != null -> "上次停在 第 $lastNumber 题"
+            else -> "还没开始"
         }
 }

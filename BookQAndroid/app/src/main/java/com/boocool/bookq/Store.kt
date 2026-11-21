@@ -22,11 +22,14 @@ data class AppState(
     val wrongIds: List<String> = emptyList(),
     val progress: Map<String, QuestionProgress> = emptyMap(),
     val attempts: List<Attempt> = emptyList(),
-    val recentBankId: String? = null,
+    val recentBankIds: List<String> = emptyList(),
+    val sequenceCursors: Map<String, SequenceCursor> = emptyMap(),
     val defaultMode: QuizMode = QuizMode.PRACTICE,
     val defaultSize: Int = 10,
     val defaultOrder: QuizOrder = QuizOrder.SEQUENTIAL,
-    val haptics: Boolean = true
+    val haptics: Boolean = true,
+    val theme: AppTheme = AppTheme.INDIGO,
+    val appearance: AppAppearance = AppAppearance.LIGHT
 )
 
 data class QuizSession(
@@ -71,6 +74,7 @@ class BookQStore(private val context: Context) {
 
     init {
         load()
+        Palette.apply(state.theme, state.appearance)
     }
 
     // MARK: - 题库
@@ -86,12 +90,89 @@ class BookQStore(private val context: Context) {
     fun bank(id: String): QuizBank? = state.banks.firstOrNull { it.id == id }
 
     val lastBank: QuizBank?
-        get() = state.recentBankId?.let(::bank) ?: state.banks.firstOrNull()
+        get() = state.recentBankIds.mapNotNull { bank(it) }.firstOrNull() ?: state.banks.firstOrNull()
+
+    val homeBanks: List<QuizBank>
+        get() {
+            val recent = state.recentBankIds.mapNotNull { bank(it) }
+            val fill = state.banks
+                .filter { item -> recent.none { it.id == item.id } }
+                .sortedByDescending { it.importedAt }
+            return (recent + fill).distinctBy { it.id }.take(2)
+        }
+
+    fun touchBank(id: String) {
+        if (bank(id) == null) return
+        val updated = (listOf(id) + state.recentBankIds.filterNot { it == id }).take(3)
+        if (updated != state.recentBankIds) {
+            state = state.copy(recentBankIds = updated)
+        }
+    }
 
     fun questions(scope: QuizScope): List<Question> = when (scope) {
         is QuizScope.All -> allQuestions
         is QuizScope.Bank -> bank(scope.id)?.questions.orEmpty()
         is QuizScope.Wrong -> wrongQuestions
+    }
+
+    private fun sequenceKey(scope: QuizScope): String = when (scope) {
+        is QuizScope.All -> "all"
+        is QuizScope.Bank -> scope.id
+        is QuizScope.Wrong -> "wrong"
+    }
+
+    fun sequenceInfo(scope: QuizScope): SequenceInfo {
+        val list = questions(scope)
+        val cursor = state.sequenceCursors[sequenceKey(scope)]
+        val nextIndex = cursor?.nextQuestionId?.let { id ->
+            list.indexOfFirst { it.id == id }.takeIf { it >= 0 }
+        }
+        val completed = cursor?.completed == true && nextIndex == null
+        val start = nextIndex ?: 0
+        val remaining = (list.size - start).coerceAtLeast(0)
+        val done = list.count { state.progress.containsKey(it.id) }
+        val lastNumber = if (nextIndex != null && nextIndex > 0) list[nextIndex - 1].num else null
+        return SequenceInfo(
+            total = list.size,
+            nextIndex = nextIndex,
+            remaining = remaining,
+            done = done,
+            completed = completed,
+            lastNumber = lastNumber
+        )
+    }
+
+    fun resetSequenceCursor(scope: QuizScope) {
+        val key = sequenceKey(scope)
+        val first = questions(scope).firstOrNull()
+        state = state.copy(
+            sequenceCursors = if (first == null) {
+                state.sequenceCursors - key
+            } else {
+                state.sequenceCursors + (key to SequenceCursor(nextQuestionId = first.id, completed = false))
+            }
+        )
+        persist()
+    }
+
+    private fun setCursorAfter(questionId: String, scope: QuizScope) {
+        val list = questions(scope)
+        val index = list.indexOfFirst { it.id == questionId }
+        if (index < 0) return
+        val key = sequenceKey(scope)
+        val cursor = if (index + 1 < list.size) {
+            SequenceCursor(nextQuestionId = list[index + 1].id, completed = false)
+        } else {
+            SequenceCursor(nextQuestionId = null, completed = true)
+        }
+        state = state.copy(sequenceCursors = state.sequenceCursors + (key to cursor))
+        persist()
+    }
+
+    private fun advanceCursorIfCurrent(questionId: String, scope: QuizScope) {
+        val key = sequenceKey(scope)
+        if (state.sequenceCursors[key]?.nextQuestionId != questionId) return
+        setCursorAfter(questionId, scope)
     }
 
     fun scopeLabel(scope: QuizScope): String = when (scope) {
@@ -129,7 +210,7 @@ class BookQStore(private val context: Context) {
         val bank = QuizBank(id = id, name = unique, fileName = fileName, questions = questions)
         state = state.copy(
             banks = state.banks + bank,
-            recentBankId = id
+            recentBankIds = (listOf(id) + state.recentBankIds.filterNot { it == id }).take(3)
         )
         persist()
         return bank
@@ -167,7 +248,8 @@ class BookQStore(private val context: Context) {
             wrongIds = state.wrongIds.filterNot { it in questionIds },
             progress = state.progress.filterKeys { it !in questionIds },
             attempts = state.attempts.filterNot { it.scope == target.name },
-            recentBankId = if (state.recentBankId == id) state.banks.firstOrNull { it.id != id }?.id else state.recentBankId
+            recentBankIds = state.recentBankIds.filterNot { it == id },
+            sequenceCursors = state.sequenceCursors - id
         )
         persist()
     }
@@ -246,8 +328,39 @@ class BookQStore(private val context: Context) {
             return
         }
         var pool = candidates
-        if (order == QuizOrder.RANDOM) pool = pool.shuffled()
-        if (size != null && size > 0 && size < pool.size) pool = pool.take(size)
+        if (order == QuizOrder.SEQUENTIAL) {
+            val info = sequenceInfo(scope)
+            var start = info.nextIndex ?: 0
+            if (info.completed) {
+                showToast("已完成一轮，重新从第 1 题开始")
+                start = 0
+                state = state.copy(
+                    sequenceCursors = state.sequenceCursors + (
+                        sequenceKey(scope) to SequenceCursor(
+                            nextQuestionId = candidates.first().id,
+                            completed = false
+                        )
+                    )
+                )
+            } else if (info.nextIndex == null) {
+                state = state.copy(
+                    sequenceCursors = state.sequenceCursors + (
+                        sequenceKey(scope) to SequenceCursor(
+                            nextQuestionId = candidates.first().id,
+                            completed = false
+                        )
+                    )
+                )
+            }
+            if (start >= candidates.size) start = 0
+            val remaining = candidates.size - start
+            val requested = size?.takeIf { it > 0 } ?: remaining
+            val take = minOf(requested, remaining)
+            pool = candidates.subList(start, start + take)
+        } else {
+            pool = pool.shuffled()
+            if (size != null && size > 0 && size < pool.size) pool = pool.take(size)
+        }
 
         session = QuizSession(
             queue = pool,
@@ -259,9 +372,9 @@ class BookQStore(private val context: Context) {
             size = size
         )
         if (scope is QuizScope.Bank) {
-            state = state.copy(recentBankId = scope.id)
-            persist()
+            touchBank(scope.id)
         }
+        persist()
         result = null
         screen = Screen.QUIZ
     }
@@ -292,6 +405,9 @@ class BookQStore(private val context: Context) {
                 answers[s.index] = if (answers[s.index] == "NA") null else "NA"
             }
             session = s.copy(answers = answers, locked = locked)
+            if (s.mode == QuizMode.PRACTICE) {
+                advanceCursorIfCurrent(question.id, s.scope)
+            }
             return
         }
 
@@ -305,6 +421,8 @@ class BookQStore(private val context: Context) {
         val answers = s.answers.toMutableList().apply { this[s.index] = key }
         val locked = s.locked.toMutableList().apply { this[s.index] = true }
         session = s.copy(answers = answers, locked = locked)
+
+        advanceCursorIfCurrent(question.id, s.scope)
 
         if (!question.hasAnswer) return
 
@@ -369,6 +487,10 @@ class BookQStore(private val context: Context) {
                 if (correct) wrongIds = wrongIds.filterNot { it == question.id }
                 else if (question.id !in wrongIds) wrongIds = listOf(question.id) + wrongIds
             }
+        }
+
+        if (s.mode == QuizMode.EXAM && s.order == QuizOrder.SEQUENTIAL) {
+            s.queue.lastOrNull()?.let { setCursorAfter(it.id, s.scope) }
         }
 
         val items = s.queue.mapIndexedNotNull { index, question ->
@@ -470,6 +592,18 @@ class BookQStore(private val context: Context) {
         state = state.copy(haptics = value); persist()
     }
 
+    fun setTheme(theme: AppTheme) {
+        state = state.copy(theme = theme)
+        Palette.apply(state.theme, state.appearance)
+        persist()
+    }
+
+    fun setAppearance(appearance: AppAppearance) {
+        state = state.copy(appearance = appearance)
+        Palette.apply(state.theme, state.appearance)
+        persist()
+    }
+
     fun removeWrong(id: String) {
         state = state.copy(wrongIds = state.wrongIds.filterNot { it == id }); persist()
     }
@@ -479,7 +613,13 @@ class BookQStore(private val context: Context) {
     }
 
     fun clearProgress() {
-        state = state.copy(progress = emptyMap(), wrongIds = emptyList(), attempts = emptyList()); persist()
+        state = state.copy(
+            progress = emptyMap(),
+            wrongIds = emptyList(),
+            attempts = emptyList(),
+            sequenceCursors = emptyMap()
+        )
+        persist()
     }
 
     // MARK: - 备份
@@ -496,6 +636,8 @@ class BookQStore(private val context: Context) {
             }
         })
         put("wrong", JSONArray(state.wrongIds))
+        put("recentBankIds", JSONArray(state.recentBankIds))
+        put("sequenceCursors", sequenceCursorsJson())
         put("attempts", JSONArray().also { arr ->
             state.attempts.forEach { a ->
                 arr.put(JSONObject().apply {
@@ -531,12 +673,18 @@ class BookQStore(private val context: Context) {
                 )
             }
         }
+        val restoredIds = recentBankIdsFrom(root, banks)
+        val restoredCursors = sequenceCursorsFrom(root.optJSONObject("sequenceCursors"))
+            .filterKeys { key ->
+                key == "all" || key == "wrong" || banks.any { it.id == key }
+            }
         state = state.copy(
             banks = banks,
             progress = progress,
             wrongIds = wrong.filter { id -> banks.any { b -> b.questions.any { it.id == id } } },
             attempts = attempts,
-            recentBankId = banks.firstOrNull()?.id
+            recentBankIds = restoredIds,
+            sequenceCursors = restoredCursors
         )
         persist()
         showToast("备份已恢复")
@@ -557,7 +705,14 @@ class BookQStore(private val context: Context) {
 
     private fun persist() {
         try {
-            stateFile.writeText(stateJson().toString())
+            val payload = stateJson().toString()
+            val temp = File(stateFile.parentFile, "${stateFile.name}.tmp")
+            temp.writeText(payload)
+            if (stateFile.exists()) stateFile.delete()
+            if (!temp.renameTo(stateFile)) {
+                temp.copyTo(stateFile, overwrite = true)
+            }
+            if (temp.exists()) temp.delete()
         } catch (_: Exception) {
         }
     }
@@ -594,14 +749,53 @@ class BookQStore(private val context: Context) {
                 wrongIds = wrong,
                 progress = progress,
                 attempts = attempts,
-                recentBankId = root.optString("recentBankId").takeIf { it.isNotBlank() },
+                recentBankIds = recentBankIdsFrom(root, banks),
+                sequenceCursors = sequenceCursorsFrom(root.optJSONObject("sequenceCursors"))
+                    .filterKeys { key ->
+                        key == "all" || key == "wrong" || banks.any { it.id == key }
+                    },
                 defaultMode = runCatching { QuizMode.valueOf(root.optString("defaultMode")) }.getOrDefault(QuizMode.PRACTICE),
                 defaultSize = root.optInt("defaultSize", 10),
                 defaultOrder = runCatching { QuizOrder.valueOf(root.optString("defaultOrder")) }.getOrDefault(QuizOrder.SEQUENTIAL),
-                haptics = root.optBoolean("haptics", true)
+                haptics = root.optBoolean("haptics", true),
+                theme = runCatching { AppTheme.valueOf(root.optString("theme")) }.getOrDefault(AppTheme.INDIGO),
+                appearance = runCatching { AppAppearance.valueOf(root.optString("appearance")) }.getOrDefault(AppAppearance.LIGHT)
             )
         } catch (_: Exception) {
         }
+    }
+
+    private fun sequenceCursorsJson(): JSONObject = JSONObject().apply {
+        state.sequenceCursors.forEach { (key, cursor) ->
+            put(key, JSONObject().apply {
+                if (cursor.nextQuestionId == null) put("nextQuestionId", JSONObject.NULL)
+                else put("nextQuestionId", cursor.nextQuestionId)
+                put("completed", cursor.completed)
+            })
+        }
+    }
+
+    private fun sequenceCursorsFrom(obj: JSONObject?): Map<String, SequenceCursor> {
+        if (obj == null) return emptyMap()
+        val result = mutableMapOf<String, SequenceCursor>()
+        obj.keys().forEach { key ->
+            val item = obj.optJSONObject(key) ?: return@forEach
+            val nextId = if (item.isNull("nextQuestionId")) null else item.optString("nextQuestionId").takeIf { it.isNotBlank() }
+            result[key] = SequenceCursor(nextQuestionId = nextId, completed = item.optBoolean("completed", false))
+        }
+        return result
+    }
+
+    private fun recentBankIdsFrom(root: JSONObject, banks: List<QuizBank>): List<String> {
+        val array = root.optJSONArray("recentBankIds")
+        val ids = if (array != null) {
+            (0 until array.length()).mapNotNull { array.optString(it).takeIf { id -> id.isNotBlank() } }
+        } else {
+            listOfNotNull(root.optString("recentBankId").takeIf { it.isNotBlank() })
+        }
+        val valid = ids.filter { id -> banks.any { it.id == id } }
+        val fallback = banks.sortedByDescending { it.importedAt }.take(2).map { it.id }
+        return (valid + fallback).distinct().take(3)
     }
 
     private fun stateJson(): JSONObject = JSONObject().apply {
@@ -621,11 +815,14 @@ class BookQStore(private val context: Context) {
                 })
             }
         })
-        put("recentBankId", state.recentBankId ?: "")
+        put("recentBankIds", JSONArray(state.recentBankIds))
+        put("sequenceCursors", sequenceCursorsJson())
         put("defaultMode", state.defaultMode.name)
         put("defaultSize", state.defaultSize)
         put("defaultOrder", state.defaultOrder.name)
         put("haptics", state.haptics)
+        put("theme", state.theme.name)
+        put("appearance", state.appearance.name)
     }
 
     private fun bankJson(bank: QuizBank): JSONObject = JSONObject().apply {

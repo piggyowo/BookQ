@@ -76,8 +76,25 @@ struct StartQuizSheet: View {
 
                     section("顺序") {
                         HStack(spacing: 10) {
-                            orderCard(.sequential, icon: "list.number", detail: "从第一题往后")
+                            orderCard(.sequential, icon: "list.number", detail: sequentialDetail)
                             orderCard(.random, icon: "shuffle", detail: "打乱后抽取")
+                        }
+                        if order == .sequential {
+                            HStack(spacing: 8) {
+                                Text("顺序进度 \(sequenceInfo.done)/\(sequenceInfo.total) · \(sequenceInfo.lastLabel)")
+                                    .font(.quizSans(11))
+                                    .foregroundColor(Palette.muted)
+                                Spacer(minLength: 8)
+                                if sequenceInfo.nextIndex != nil {
+                                    Button("从头开始") {
+                                        store.resetSequenceCursor(for: scope)
+                                    }
+                                    .font(.quizSans(11.5, weight: .medium))
+                                    .foregroundColor(Palette.primary)
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 4)
                         }
                     }
 
@@ -85,6 +102,11 @@ struct StartQuizSheet: View {
                         Text(summaryLine)
                             .font(.quizSans(12))
                             .foregroundColor(Palette.muted)
+                        if let warning = sequenceWarning {
+                            Text(warning)
+                                .font(.quizSans(11.5))
+                                .foregroundColor(Palette.accent)
+                        }
                         if let warning = scopeWarning {
                             Text(warning)
                                 .font(.quizSans(11.5))
@@ -142,6 +164,38 @@ struct StartQuizSheet: View {
         store.questions(in: scope).count
     }
 
+    private var sequenceInfo: SequenceInfo {
+        store.sequenceInfo(for: scope)
+    }
+
+    private var sequentialDetail: String {
+        guard availableCount > 0 else { return "暂无题目" }
+        if sequenceInfo.completed {
+            return "上一轮已完成 · 从第 1 题开始"
+        }
+        if let next = sequenceInfo.nextIndex, next > 0 {
+            return "从第 \(next + 1) 题继续 · 还剩 \(sequenceInfo.remaining) 题"
+        }
+        return "从第 1 题开始 · 共 \(availableCount) 题"
+    }
+
+    private var plannedCount: Int {
+        let available = availableCount
+        guard order == .sequential else {
+            return min(size ?? available, available)
+        }
+        let remaining = sequenceInfo.completed ? available : sequenceInfo.remaining
+        let requested = size.flatMap { $0 > 0 ? $0 : nil } ?? remaining
+        return min(requested, remaining)
+    }
+
+    private var sequenceWarning: String? {
+        guard order == .sequential, availableCount > 0 else { return nil }
+        let remaining = sequenceInfo.completed ? availableCount : sequenceInfo.remaining
+        guard let selected = size, selected > remaining, remaining > 0 else { return nil }
+        return "顺序模式只剩 \(remaining) 题，本轮会先做完这些"
+    }
+
     private var countOptions: [Int?] {
         let available = availableCount
         var values: [Int?] = []
@@ -163,8 +217,7 @@ struct StartQuizSheet: View {
     }
 
     private var summaryLine: String {
-        let total = min(size ?? availableCount, availableCount)
-        return "\(scopeTitle) · \(mode.title)模式 · \(total) 题 · \(order.title)"
+        "\(scopeTitle) · \(mode.title)模式 · \(plannedCount) 题 · \(order.title)"
     }
 
     private var scopeWarning: String? {

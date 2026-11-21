@@ -145,7 +145,7 @@ struct QuizView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Text(question.num)
                         .font(.quizSerif(44))
-                        .foregroundColor(Color(hex: "d8cbb3"))
+                        .foregroundColor(Palette.line)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
 
@@ -212,7 +212,7 @@ struct QuizView: View {
                 )
             }
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: Color(hex: "212c36").opacity(0.16), radius: 18, x: 0, y: 12)
+            .shadow(color: Palette.shadow.opacity(0.16), radius: 18, x: 0, y: 12)
             .padding(.top, 22)
             .id(question.id)
         }
@@ -239,7 +239,7 @@ struct QuizView: View {
         .padding(.vertical, 18)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(Color(hex: "fbf6ec"))
+                .fill(Palette.amberBG)
                 .overlay(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .stroke(Palette.amberLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
@@ -396,7 +396,7 @@ struct QuizView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(Palette.ink)
                                     .frame(width: 32, height: 32)
-                                    .background(Circle().fill(Color(hex: "faf6ee")))
+                                    .background(Circle().fill(Palette.track))
                             }
                             .buttonStyle(.plain)
                         }
@@ -418,11 +418,11 @@ struct QuizView: View {
                             alignment: .leading,
                             spacing: 10
                         ) {
-                            legend(color: Color(hex: "faf6ee"), text: "未作答")
-                            legend(color: Color(hex: "eaf1f3"), text: "已作答")
+                            legend(color: Palette.track, text: "未作答")
+                            legend(color: Palette.line2, text: "已作答")
                             legend(color: Palette.greenBG, text: "答对")
                             legend(color: Palette.redBG, text: "答错")
-                            legend(color: Color(hex: "f9efdc"), text: "题库无答案")
+                            legend(color: Palette.amberBG, text: "题库无答案")
                         }
                         .padding(.top, 18)
                         .padding(.bottom, 22)
@@ -465,11 +465,11 @@ struct QuizView: View {
         let locked = store.mode == .practice && store.locked[position]
         let current = position == store.index
 
-        var fill = Color(hex: "faf6ee")
+        var fill = Palette.track
         var textColor = Palette.ink2
 
         if !question.hasAnswer, answer != nil {
-            fill = Color(hex: "f9efdc")
+            fill = Palette.amberBG
             textColor = Palette.amber
         } else if store.mode == .practice && locked {
             if answer == question.answer {
@@ -480,7 +480,7 @@ struct QuizView: View {
                 textColor = Palette.red
             }
         } else if answer != nil {
-            fill = Color(hex: "eaf1f3")
+            fill = Palette.line2
             textColor = Palette.primary
         }
 
@@ -583,11 +583,11 @@ private struct OptionRow: View {
 
     private var background: Color {
         switch visual {
-        case .selected: return Color(hex: "eff5f7")
+        case .selected: return Palette.line2
         case .correct: return Palette.greenBG
         case .wrong: return Palette.redBG
         case .noAnswer: return Palette.amberBG
-        default: return Color(hex: "fdfaf3")
+        default: return Palette.card
         }
     }
 
@@ -607,14 +607,14 @@ private struct OptionRow: View {
         case .correct: return Palette.green
         case .wrong: return Palette.red
         case .noAnswer: return Palette.gold
-        default: return Color(hex: "eee6d6")
+        default: return Palette.track
         }
     }
 
     private var keyColor: Color {
         switch visual {
         case .selected, .correct, .wrong, .noAnswer: return .white
-        default: return Color(hex: "6a5a3c")
+        default: return Palette.amber
         }
     }
 

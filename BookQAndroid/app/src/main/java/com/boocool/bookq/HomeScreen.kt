@@ -1,5 +1,6 @@
 package com.boocool.bookq
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,7 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -241,70 +244,50 @@ private fun PracticeHero(store: BookQStore, onStart: (String?) -> Unit, onWrong:
     }
 }
 
-private fun bankMonogram(name: String): String {
-    val clean = name.trim()
-    val latin = clean.takeWhile { it.code < 128 && it.isLetter() }
-    return when {
-        latin.length >= 2 -> latin.take(2).uppercase()
-        clean.isNotEmpty() -> clean.take(1)
-        else -> "题"
-    }
-}
-
 @Composable
 private fun MyBanks(store: BookQStore, onStart: (String?) -> Unit) {
-    val shown = store.state.banks.take(3)
+    val shown = store.homeBanks
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader("我的题库", "管理", onTrailing = { store.setTab(AppTab.LIBRARY) })
         CardSurface(padding = 0.dp, radius = 18.dp) {
             Column {
                 shown.forEachIndexed { index, bank ->
-                    BankRow(store, bank, onClick = { onStart(bank.id) })
+                    BankRow(store, bank, index = index, onClick = { onStart(bank.id) })
                     if (index != shown.lastIndex) {
                         HorizontalDivider(
                             color = Palette.Line2,
                             thickness = 1.dp,
-                            modifier = Modifier.padding(start = 54.dp)
+                            modifier = Modifier.padding(start = 16.dp)
                         )
                     }
                 }
+                if (shown.isNotEmpty()) {
+                    DashedDivider()
+                }
+                AllBanksRow(store)
             }
-        }
-        if (store.state.banks.size > 3) {
-            Text(
-                "查看全部 ${store.state.banks.size} 个题库",
-                style = sans(12).copy(color = Palette.Muted),
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .clickable { store.setTab(AppTab.LIBRARY) }
-                    .padding(vertical = 4.dp)
-            )
         }
     }
 }
 
 @Composable
-private fun BankRow(store: BookQStore, bank: QuizBank, onClick: () -> Unit) {
+private fun BankRow(store: BookQStore, bank: QuizBank, index: Int, onClick: () -> Unit) {
     val progress = store.bankProgress(bank)
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(end = 13.dp)
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             Modifier
-                .size(38.dp, 42.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (bank.colorIndex == 0) Palette.Primary else Palette.Accent),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                bankMonogram(bank.name),
-                style = serif(15).copy(color = Palette.Cream)
-            )
-        }
+                .width(4.dp)
+                .height(42.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (index % 2 == 0) Palette.Primary else Palette.Accent)
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(bank.name, style = sans(14, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -317,6 +300,70 @@ private fun BankRow(store: BookQStore, bank: QuizBank, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(8.dp))
         Icon(Icons.Outlined.ArrowForward, contentDescription = null, tint = Palette.Line, modifier = Modifier.size(10.dp))
+    }
+}
+
+@Composable
+private fun AllBanksRow(store: BookQStore) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { store.setTab(AppTab.LIBRARY) }
+            .background(Palette.Primary.copy(alpha = 0.025f))
+            .padding(start = 16.dp, end = 13.dp)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AllBanksShelf()
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("全部题库", style = sans(14, FontWeight.SemiBold))
+            Text(
+                if (store.state.banks.size > 3) "共 ${store.state.banks.size} 个 · 最近导入 3 个"
+                else "共 ${store.state.banks.size} 个",
+                style = sans(11).copy(color = Palette.Muted)
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text("查看全部", style = sans(11, FontWeight.Medium).copy(color = Palette.Primary))
+        Spacer(Modifier.width(6.dp))
+        Icon(Icons.Outlined.ArrowForward, contentDescription = null, tint = Palette.Line, modifier = Modifier.size(10.dp))
+    }
+}
+
+@Composable
+private fun AllBanksShelf() {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ShelfBar(20.dp, Palette.Primary)
+            ShelfBar(24.dp, Palette.Accent)
+            ShelfBar(18.dp, Palette.Gold)
+        }
+        Box(Modifier.width(24.dp).height(1.dp).background(Palette.Line))
+    }
+}
+
+@Composable
+private fun ShelfBar(height: androidx.compose.ui.unit.Dp, color: Color) {
+    Box(
+        Modifier
+            .width(4.dp)
+            .height(height)
+            .clip(RoundedCornerShape(1.dp))
+            .background(color)
+    )
+}
+
+@Composable
+private fun DashedDivider() {
+    Canvas(Modifier.fillMaxWidth().height(1.dp)) {
+        drawLine(
+            color = Palette.Line2,
+            start = Offset(0f, 0.5f),
+            end = Offset(size.width, 0.5f),
+            strokeWidth = 1f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f), 0f)
+        )
     }
 }
 
@@ -404,7 +451,7 @@ private fun PaperStackArt(modifier: Modifier = Modifier) {
                 .offset(x = 10.dp, y = 12.dp)
                 .rotate(-7f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFFE8DDC9))
+                .background(Palette.Line)
         )
         Box(
             Modifier
@@ -412,7 +459,7 @@ private fun PaperStackArt(modifier: Modifier = Modifier) {
                 .offset(x = 28.dp, y = 4.dp)
                 .rotate(4f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFFF2E9D9))
+                .background(Palette.Line2)
         )
         Column(
             Modifier

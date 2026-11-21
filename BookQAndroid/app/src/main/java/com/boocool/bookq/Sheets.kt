@@ -80,6 +80,20 @@ fun StartQuizSheet(
     var order by remember { mutableStateOf(store.state.defaultOrder) }
 
     val available = store.questions(scope).size
+    val sequenceInfo = store.sequenceInfo(scope)
+    val sequentialDetail = when {
+        available == 0 -> "暂无题目"
+        sequenceInfo.completed -> "上一轮已完成 · 从第 1 题开始"
+        sequenceInfo.nextIndex != null && sequenceInfo.nextIndex!! > 0 ->
+            "从第 ${sequenceInfo.nextIndex!! + 1} 题继续 · 还剩 ${sequenceInfo.remaining} 题"
+        else -> "从第 1 题开始 · 共 $available 题"
+    }
+    val remainingForOrder = if (sequenceInfo.completed) available else sequenceInfo.remaining
+    val planned = if (order == QuizOrder.SEQUENTIAL) {
+        minOf(size ?: remainingForOrder, remainingForOrder)
+    } else {
+        minOf(size ?: available, available)
+    }
     val countOptions = buildList<Int?> {
         listOf(10, 20, 50).filter { it <= available }.forEach { add(it) }
         if (available > 0) add(null)
@@ -156,16 +170,48 @@ fun StartQuizSheet(
 
             SheetSection("顺序") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OrderCard(QuizOrder.SEQUENTIAL, order, Modifier.weight(1f)) { order = it }
+                    OrderCard(
+                        QuizOrder.SEQUENTIAL,
+                        order,
+                        Modifier.weight(1f),
+                        detail = sequentialDetail
+                    ) { order = it }
                     OrderCard(QuizOrder.RANDOM, order, Modifier.weight(1f)) { order = it }
+                }
+                if (order == QuizOrder.SEQUENTIAL) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "顺序进度 ${sequenceInfo.done}/${sequenceInfo.total} · ${sequenceInfo.lastLabel}",
+                            style = sans(11).copy(color = Palette.Muted),
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (sequenceInfo.total > 0 && (sequenceInfo.nextIndex != null || sequenceInfo.completed)) {
+                            Text(
+                                "从头开始",
+                                style = sans(11, FontWeight.Medium).copy(color = Palette.Primary),
+                                modifier = Modifier
+                                    .clickable { store.resetSequenceCursor(scope) }
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
 
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "${store.scopeLabel(scope)} · ${mode.title}模式 · ${minOf(size ?: available, available)} 题 · ${order.title}",
+                    "${store.scopeLabel(scope)} · ${mode.title}模式 · $planned 题 · ${order.title}",
                     style = sans(12).copy(color = Palette.Muted)
                 )
+                if (order == QuizOrder.SEQUENTIAL && size != null && size!! > remainingForOrder && remainingForOrder > 0) {
+                    Text(
+                        "顺序模式只剩 $remainingForOrder 题，本轮会先做完这些",
+                        style = sans(11).copy(color = Palette.Accent)
+                    )
+                }
                 val noAnswer = store.questions(scope).count { !it.hasAnswer }
                 if (noAnswer > 0) {
                     Text("其中 $noAnswer 题题库未提供答案，会单独提示", style = sans(11).copy(color = Palette.Accent))
@@ -282,7 +328,13 @@ private fun ModeCard(value: QuizMode, selectedMode: QuizMode, modifier: Modifier
 }
 
 @Composable
-private fun OrderCard(value: QuizOrder, selectedOrder: QuizOrder, modifier: Modifier = Modifier, onSelect: (QuizOrder) -> Unit) {
+private fun OrderCard(
+    value: QuizOrder,
+    selectedOrder: QuizOrder,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+    onSelect: (QuizOrder) -> Unit
+) {
     val selected = value == selectedOrder
     Row(
         modifier
@@ -301,7 +353,12 @@ private fun OrderCard(value: QuizOrder, selectedOrder: QuizOrder, modifier: Modi
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value.title, style = sans(13, FontWeight.SemiBold))
-            Text(value.subtitle, style = sans(10).copy(color = Palette.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                detail ?: value.subtitle,
+                style = sans(10).copy(color = Palette.Muted),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

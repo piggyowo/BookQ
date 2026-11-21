@@ -6,11 +6,17 @@ import UIKit
 final class QuizStore: ObservableObject {
     // 主导航
     @Published var screen: Screen = .home
-    @Published var selectedTab: AppTab = .home
+    @Published var selectedTab: AppTab = .home {
+        didSet {
+            if selectedTab != .settings { settingsPage = nil }
+        }
+    }
+    @Published var settingsPage: SettingsPage?
 
     // 题库
     @Published var banks: [QuizBank] = []
-    @Published var recentBankID: UUID?
+    @Published var recentBankIDs: [UUID] = []
+    @Published var sequenceCursors: [String: SequenceCursor] = [:]
 
     // 设置
     @Published var defaultMode: QuizMode = .practice {
@@ -25,6 +31,21 @@ final class QuizStore: ObservableObject {
     @Published var haptics: Bool = true {
         didSet { persist() }
     }
+
+    @Published var theme: AppTheme = .indigo {
+        didSet {
+            applyTheme()
+            persist()
+        }
+    }
+    @Published var appearance: AppAppearance = .light {
+        didSet {
+            applyTheme()
+            persist()
+        }
+    }
+
+    var themeKey: String { "\(theme.rawValue)-\(appearance.rawValue)" }
 
     // 本轮
     @Published var currentScope: QuizScope = .all
@@ -49,6 +70,11 @@ final class QuizStore: ObservableObject {
 
     init() {
         load()
+        applyTheme()
+    }
+
+    private func applyTheme() {
+        ThemeRuntime.apply(theme: theme, appearance: appearance)
     }
 
     // MARK: - 题库读取
@@ -88,10 +114,97 @@ final class QuizStore: ObservableObject {
     }
 
     var lastBank: QuizBank? {
-        if let recentBankID, let bank = bank(id: recentBankID) {
-            return bank
+        for id in recentBankIDs {
+            if let bank = bank(id: id) { return bank }
         }
         return banks.first
+    }
+
+    var homeBanks: [QuizBank] {
+        var seen = Set<UUID>()
+        var result: [QuizBank] = []
+        for id in recentBankIDs {
+            guard let bank = bank(id: id), seen.insert(id).inserted else { continue }
+            result.append(bank)
+            if result.count == 2 { break }
+        }
+        if result.count < 2 {
+            for bank in banks.sorted(by: { $0.importedAt > $1.importedAt }) {
+                guard seen.insert(bank.id).inserted else { continue }
+                result.append(bank)
+                if result.count == 2 { break }
+            }
+        }
+        return result
+    }
+
+    private func touchBank(_ id: UUID) {
+        recentBankIDs.removeAll { $0 == id }
+        recentBankIDs.insert(id, at: 0)
+        if recentBankIDs.count > 3 { recentBankIDs.removeLast(recentBankIDs.count - 3) }
+    }
+
+    // MARK: - 顺序游标
+
+    private func sequenceKey(_ scope: QuizScope) -> String {
+        switch scope {
+        case .all: return "all"
+        case .bank(let id): return id.uuidString
+        case .wrong: return "wrong"
+        }
+    }
+
+    func sequenceInfo(for scope: QuizScope) -> SequenceInfo {
+        let list = questions(in: scope)
+        let key = sequenceKey(scope)
+        let cursor = sequenceCursors[key]
+        let nextIndex = cursor?.nextQuestionID.flatMap { id in
+            list.firstIndex { $0.id == id }
+        }
+        let completed = cursor?.completed == true && nextIndex == nil
+        let start = nextIndex ?? 0
+        let remaining = max(0, list.count - start)
+        let done = list.filter { progress[$0.id] != nil }.count
+        let lastNumber: String? = {
+            guard let nextIndex, nextIndex > 0, list.indices.contains(nextIndex - 1) else { return nil }
+            return list[nextIndex - 1].num
+        }()
+        return SequenceInfo(
+            total: list.count,
+            nextIndex: nextIndex,
+            remaining: remaining,
+            done: done,
+            completed: completed,
+            lastNumber: lastNumber
+        )
+    }
+
+    func resetSequenceCursor(for scope: QuizScope) {
+        let key = sequenceKey(scope)
+        if let first = questions(in: scope).first {
+            sequenceCursors[key] = SequenceCursor(nextQuestionID: first.id, completed: false)
+        } else {
+            sequenceCursors[key] = nil
+        }
+        persist()
+    }
+
+    private func setCursor(after questionID: String, scope: QuizScope) {
+        let list = questions(in: scope)
+        guard let index = list.firstIndex(where: { $0.id == questionID }) else { return }
+        let key = sequenceKey(scope)
+        if index + 1 < list.count {
+            sequenceCursors[key] = SequenceCursor(nextQuestionID: list[index + 1].id, completed: false)
+        } else {
+            sequenceCursors[key] = SequenceCursor(nextQuestionID: nil, completed: true)
+        }
+        persist()
+    }
+
+    private func advanceCursorIfCurrent(_ questionID: String, scope: QuizScope) {
+        let key = sequenceKey(scope)
+        guard sequenceCursors[key]?.nextQuestionID == questionID else { return }
+        setCursor(after: questionID, scope: scope)
     }
 
     var scopeLabel: String {
@@ -142,7 +255,7 @@ final class QuizStore: ObservableObject {
             questions: questions
         )
         banks.append(bank)
-        recentBankID = bankID
+        touchBank(bankID)
         persist()
         return bank
     }
@@ -185,8 +298,10 @@ final class QuizStore: ObservableObject {
         wrongIDs.removeAll { questionIDs.contains($0) }
         progress = progress.filter { !questionIDs.contains($0.key) }
         attempts.removeAll { $0.scope == bank.name }
-        if recentBankID == id {
-            recentBankID = banks.first?.id
+        recentBankIDs.removeAll { $0 == id }
+        sequenceCursors[sequenceKey(.bank(id))] = nil
+        if recentBankIDs.isEmpty, let first = banks.first {
+            recentBankIDs = [first.id]
         }
         if case .bank(let activeID) = currentScope, activeID == id {
             currentScope = .all
@@ -276,12 +391,33 @@ final class QuizStore: ObservableObject {
         self.size = size
         self.order = order
 
-        var pool = candidates
-        if order == .random {
-            pool.shuffle()
-        }
-        if let size, size > 0, size < pool.count {
-            pool = Array(pool.prefix(size))
+        var pool: [Question]
+        if order == .sequential {
+            let info = sequenceInfo(for: scope)
+            var start = info.nextIndex ?? 0
+            if info.completed {
+                showToast("已完成一轮，重新从第 1 题开始")
+                start = 0
+                let key = sequenceKey(scope)
+                sequenceCursors[key] = candidates.first.map {
+                    SequenceCursor(nextQuestionID: $0.id, completed: false)
+                }
+            } else if info.nextIndex == nil {
+                let key = sequenceKey(scope)
+                sequenceCursors[key] = candidates.first.map {
+                    SequenceCursor(nextQuestionID: $0.id, completed: false)
+                }
+            }
+            if start >= candidates.count { start = 0 }
+            let remaining = candidates.count - start
+            let requested = size.flatMap { $0 > 0 ? $0 : nil }
+            let take = min(requested ?? remaining, remaining)
+            pool = Array(candidates[start..<(start + take)])
+        } else {
+            pool = candidates.shuffled()
+            if let size, size > 0, size < pool.count {
+                pool = Array(pool.prefix(size))
+            }
         }
 
         queue = pool
@@ -293,9 +429,9 @@ final class QuizStore: ObservableObject {
         result = nil
         screen = .quiz
         if case .bank(let id) = scope {
-            recentBankID = id
-            persist()
+            touchBank(id)
         }
+        persist()
     }
 
     func startWrongPractice() {
@@ -329,6 +465,7 @@ final class QuizStore: ObservableObject {
             if mode == .practice {
                 answers[index] = "NA"
                 locked[index] = true
+                advanceCursorIfCurrent(question.id, scope: currentScope)
             } else {
                 answers[index] = answers[index] == "NA" ? nil : "NA"
             }
@@ -342,6 +479,7 @@ final class QuizStore: ObservableObject {
 
         answers[index] = key
         locked[index] = true
+        advanceCursorIfCurrent(question.id, scope: currentScope)
 
         // 题库无答案：只提示，不计分、不进错题本、不加掌握度
         guard question.hasAnswer else { return }
@@ -415,6 +553,10 @@ final class QuizStore: ObservableObject {
                 }
                 progress[question.id] = item
             }
+        }
+
+        if mode == .exam, order == .sequential, let last = queue.last {
+            setCursor(after: last.id, scope: currentScope)
         }
 
         var items: [ResultItem] = []
@@ -498,6 +640,7 @@ final class QuizStore: ObservableObject {
         progress = [:]
         wrongIDs = []
         attempts = []
+        sequenceCursors = [:]
         persist()
     }
 
@@ -508,7 +651,9 @@ final class QuizStore: ObservableObject {
             banks: banks,
             progress: progress,
             wrong: wrongIDs,
-            attempts: attempts
+            attempts: attempts,
+            sequenceCursors: sequenceCursors,
+            recentBankIDs: recentBankIDs
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -529,7 +674,16 @@ final class QuizStore: ObservableObject {
             backup.banks.contains { $0.questions.contains { $0.id == id } }
         }
         attempts = backup.attempts
-        recentBankID = banks.first?.id
+        sequenceCursors = (backup.sequenceCursors ?? [:]).filter { (key, _) in
+            key == "all" || key == "wrong" || backup.banks.contains { $0.id.uuidString == key }
+        }
+        let restoredRecent = (backup.recentBankIDs ?? []).filter { id in
+            backup.banks.contains { $0.id == id }
+        }
+        recentBankIDs = Array(restoredRecent.prefix(3))
+        if recentBankIDs.isEmpty {
+            recentBankIDs = Array(banks.prefix(2).map(\.id))
+        }
         persist()
     }
 
@@ -549,30 +703,45 @@ final class QuizStore: ObservableObject {
         var wrong: [String]
         var progress: [String: QuestionProgress]
         var attempts: [Attempt]
-        var recentBankID: UUID?
+        var recentBankIDs: [UUID]
+        var sequenceCursors: [String: SequenceCursor]
         var defaultMode: QuizMode
         var defaultSize: Int
         var defaultOrder: QuizOrder
         var haptics: Bool
+        var theme: AppTheme
+        var appearance: AppAppearance
+
+        private enum CodingKeys: String, CodingKey {
+            case banks, wrong, progress, attempts
+            case recentBankID, recentBankIDs, sequenceCursors
+            case defaultMode, defaultSize, defaultOrder, haptics, theme, appearance
+        }
 
         init(banks: [QuizBank],
              wrong: [String],
              progress: [String: QuestionProgress],
              attempts: [Attempt],
-             recentBankID: UUID?,
+             recentBankIDs: [UUID],
+             sequenceCursors: [String: SequenceCursor],
              defaultMode: QuizMode,
              defaultSize: Int,
              defaultOrder: QuizOrder,
-             haptics: Bool) {
+             haptics: Bool,
+             theme: AppTheme,
+             appearance: AppAppearance) {
             self.banks = banks
             self.wrong = wrong
             self.progress = progress
             self.attempts = attempts
-            self.recentBankID = recentBankID
+            self.recentBankIDs = recentBankIDs
+            self.sequenceCursors = sequenceCursors
             self.defaultMode = defaultMode
             self.defaultSize = defaultSize
             self.defaultOrder = defaultOrder
             self.haptics = haptics
+            self.theme = theme
+            self.appearance = appearance
         }
 
         init(from decoder: Decoder) throws {
@@ -581,11 +750,20 @@ final class QuizStore: ObservableObject {
             wrong = try container.decodeIfPresent([String].self, forKey: .wrong) ?? []
             progress = try container.decodeIfPresent([String: QuestionProgress].self, forKey: .progress) ?? [:]
             attempts = try container.decodeIfPresent([Attempt].self, forKey: .attempts) ?? []
-            recentBankID = try container.decodeIfPresent(UUID.self, forKey: .recentBankID)
+            if let ids = try container.decodeIfPresent([UUID].self, forKey: .recentBankIDs) {
+                recentBankIDs = ids
+            } else if let old = try container.decodeIfPresent(UUID.self, forKey: .recentBankID) {
+                recentBankIDs = [old]
+            } else {
+                recentBankIDs = []
+            }
+            sequenceCursors = try container.decodeIfPresent([String: SequenceCursor].self, forKey: .sequenceCursors) ?? [:]
             defaultMode = try container.decodeIfPresent(QuizMode.self, forKey: .defaultMode) ?? .practice
             defaultSize = try container.decodeIfPresent(Int.self, forKey: .defaultSize) ?? 10
             defaultOrder = try container.decodeIfPresent(QuizOrder.self, forKey: .defaultOrder) ?? .sequential
             haptics = try container.decodeIfPresent(Bool.self, forKey: .haptics) ?? true
+            theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .indigo
+            appearance = try container.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .light
         }
     }
 
@@ -596,6 +774,8 @@ final class QuizStore: ObservableObject {
         let progress: [String: QuestionProgress]
         let wrong: [String]
         let attempts: [Attempt]
+        let sequenceCursors: [String: SequenceCursor]?
+        let recentBankIDs: [UUID]?
     }
 
     private static var stateURL: URL {
@@ -618,11 +798,20 @@ final class QuizStore: ObservableObject {
         wrongIDs = saved.wrong
         progress = saved.progress
         attempts = saved.attempts
-        recentBankID = saved.recentBankID
+        recentBankIDs = saved.recentBankIDs.filter { id in
+            saved.banks.contains { $0.id == id }
+        }
+        if recentBankIDs.isEmpty {
+            recentBankIDs = Array(saved.banks.sorted(by: { $0.importedAt > $1.importedAt }).prefix(2).map(\.id))
+        }
+        sequenceCursors = saved.sequenceCursors
         defaultMode = saved.defaultMode
         defaultSize = saved.defaultSize
         defaultOrder = saved.defaultOrder
         haptics = saved.haptics
+        theme = saved.theme
+        appearance = saved.appearance
+        applyTheme()
     }
 
     private func persist() {
@@ -631,11 +820,14 @@ final class QuizStore: ObservableObject {
             wrong: wrongIDs,
             progress: progress,
             attempts: attempts,
-            recentBankID: recentBankID,
+            recentBankIDs: recentBankIDs,
+            sequenceCursors: sequenceCursors,
             defaultMode: defaultMode,
             defaultSize: defaultSize,
             defaultOrder: defaultOrder,
-            haptics: haptics
+            haptics: haptics,
+            theme: theme,
+            appearance: appearance
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

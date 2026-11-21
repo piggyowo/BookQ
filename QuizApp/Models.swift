@@ -1,5 +1,53 @@
 import Foundation
 
+
+// MARK: - 外观
+
+enum AppTheme: String, CaseIterable, Codable, Hashable, Identifiable {
+    case indigo
+    case rust
+    case moss
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .indigo: return "织物靛蓝"
+        case .rust: return "茜草暖砂"
+        case .moss: return "苔绿青铜"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .indigo: return "墨蓝布卷 · 黄铜微光"
+        case .rust: return "暖砂纸 · 茜草红"
+        case .moss: return "苔绿 · 青铜刻度"
+        }
+    }
+}
+
+enum AppAppearance: String, CaseIterable, Codable, Hashable, Identifiable {
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .light: return "纸张质感最完整"
+        case .dark: return "夜间低亮更护眼"
+        }
+    }
+}
+
 // MARK: - 题目
 
 struct Question: Codable, Identifiable, Hashable {
@@ -101,6 +149,30 @@ enum QuizOrder: String, CaseIterable, Codable, Hashable {
         case .random: return "所有题打乱后抽取"
         case .sequential: return "从第一题往后做"
         }
+    }
+}
+
+// MARK: - 顺序做题记忆
+
+struct SequenceCursor: Codable, Hashable {
+    var nextQuestionID: String?
+    var completed: Bool = false
+}
+
+struct SequenceInfo {
+    let total: Int
+    let nextIndex: Int?
+    let remaining: Int
+    let done: Int
+    let completed: Bool
+    let lastNumber: String?
+
+    var nextNumber: Int { (nextIndex ?? 0) + 1 }
+
+    var lastLabel: String {
+        if completed { return "上一轮已完成" }
+        if let lastNumber { return "上次停在 第 \(lastNumber) 题" }
+        return "还没开始"
     }
 }
 

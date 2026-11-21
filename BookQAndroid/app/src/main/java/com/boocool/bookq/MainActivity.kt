@@ -1,5 +1,6 @@
 package com.boocool.bookq
 
+import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
@@ -26,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -47,10 +49,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+        val store = BookQStore(applicationContext)
         setContent {
             BookQTheme {
-                BookQApp()
+                BookQApp(store)
             }
         }
     }
@@ -62,10 +64,15 @@ private sealed class LibrarySheet {
 }
 
 @Composable
-private fun BookQApp() {
+private fun BookQApp(store: BookQStore) {
     val context = LocalContext.current
-    val store = remember { BookQStore(context.applicationContext) }
     val coroutine = rememberCoroutineScope()
+    val activity = context as? Activity
+    SideEffect {
+        activity?.let {
+            WindowCompat.getInsetsController(it.window, it.window.decorView).isAppearanceLightStatusBars = !Palette.IsDark
+        }
+    }
 
     var showStart by remember { mutableStateOf(false) }
     var presetBankId by remember { mutableStateOf<String?>(null) }

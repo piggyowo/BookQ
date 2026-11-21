@@ -3,27 +3,157 @@ import Foundation
 
 // MARK: - 颜色
 
+struct BookQPalette {
+    let isDark: Bool
+    let ink: Color
+    let ink2: Color
+    let muted: Color
+    let paper: Color
+    let card: Color
+    let line: Color
+    let line2: Color
+    let primary: Color
+    let primary2: Color
+    let accent: Color
+    let gold: Color
+    let green: Color
+    let greenBG: Color
+    let red: Color
+    let redBG: Color
+    let amber: Color
+    let amberLine: Color
+    let amberBG: Color
+    let track: Color
+    let cream: Color
+    let hero1: Color
+    let hero2: Color
+    let hero3: Color
+    let glow1: Color
+    let glow2: Color
+    let shadow: Color
+}
+
+enum BookQPalettes {
+    static let indigoLight = BookQPalette(
+        isDark: false,
+        ink: Color(hex: "16232f"), ink2: Color(hex: "44525f"), muted: Color(hex: "7c8794"),
+        paper: Color(hex: "f5f0e7"), card: Color(hex: "fffdf8"), line: Color(hex: "e5dccb"), line2: Color(hex: "efe7d8"),
+        primary: Color(hex: "1a455c"), primary2: Color(hex: "2a6b80"), accent: Color(hex: "b9613c"), gold: Color(hex: "bd9350"),
+        green: Color(hex: "1c7a5b"), greenBG: Color(hex: "e4f2ea"), red: Color(hex: "ab3a2c"), redBG: Color(hex: "fae8e3"),
+        amber: Color(hex: "8a6a2f"), amberLine: Color(hex: "d9bd8c"), amberBG: Color(hex: "fbf3e3"),
+        track: Color(hex: "eee7d9"), cream: Color(hex: "f6efe2"),
+        hero1: Color(hex: "152b3a"), hero2: Color(hex: "1c455c"), hero3: Color(hex: "25596a"),
+        glow1: Color(hex: "bd9350"), glow2: Color(hex: "2a6b80"), shadow: Color(hex: "212c36")
+    )
+
+    static let rustLight = BookQPalette(
+        isDark: false,
+        ink: Color(hex: "2b211c"), ink2: Color(hex: "5c493f"), muted: Color(hex: "806f63"),
+        paper: Color(hex: "f6ede0"), card: Color(hex: "fff9ef"), line: Color(hex: "e6d2bd"), line2: Color(hex: "f0e1ce"),
+        primary: Color(hex: "8d3f2f"), primary2: Color(hex: "b45c43"), accent: Color(hex: "20505d"), gold: Color(hex: "c18a4a"),
+        green: Color(hex: "39775a"), greenBG: Color(hex: "e6f0e7"), red: Color(hex: "a83a2a"), redBG: Color(hex: "fae8e3"),
+        amber: Color(hex: "8a6a2f"), amberLine: Color(hex: "d9bd8c"), amberBG: Color(hex: "fbf3e3"),
+        track: Color(hex: "eee0cf"), cream: Color(hex: "fbf1df"),
+        hero1: Color(hex: "57201a"), hero2: Color(hex: "8d3f2f"), hero3: Color(hex: "b45c43"),
+        glow1: Color(hex: "c18a4a"), glow2: Color(hex: "20505d"), shadow: Color(hex: "2b1c16")
+    )
+
+    static let mossLight = BookQPalette(
+        isDark: false,
+        ink: Color(hex: "1d2b22"), ink2: Color(hex: "46584b"), muted: Color(hex: "708074"),
+        paper: Color(hex: "edf0e4"), card: Color(hex: "fbfcf4"), line: Color(hex: "d7ddc9"), line2: Color(hex: "e6e9dc"),
+        primary: Color(hex: "2c4f3c"), primary2: Color(hex: "4f7f5f"), accent: Color(hex: "a6753f"), gold: Color(hex: "b08d55"),
+        green: Color(hex: "2e7a55"), greenBG: Color(hex: "e3f0e7"), red: Color(hex: "a84535"), redBG: Color(hex: "fae8e3"),
+        amber: Color(hex: "8a6a2f"), amberLine: Color(hex: "d1bf97"), amberBG: Color(hex: "f7f1e2"),
+        track: Color(hex: "e3e8da"), cream: Color(hex: "f4ecd9"),
+        hero1: Color(hex: "172d22"), hero2: Color(hex: "2c4f3c"), hero3: Color(hex: "4f7f5f"),
+        glow1: Color(hex: "b08d55"), glow2: Color(hex: "4f7f5f"), shadow: Color(hex: "1b2a20")
+    )
+
+    static let indigoDark = BookQPalette(
+        isDark: true,
+        ink: Color(hex: "f1f0e7"), ink2: Color(hex: "c5d0d2"), muted: Color(hex: "8fa1a7"),
+        paper: Color(hex: "111b22"), card: Color(hex: "192832"), line: Color(hex: "2c3f49"), line2: Color(hex: "23343d"),
+        primary: Color(hex: "4c8fa4"), primary2: Color(hex: "70adbb"), accent: Color(hex: "d17a54"), gold: Color(hex: "d2a65f"),
+        green: Color(hex: "6db795"), greenBG: Color(hex: "183830"), red: Color(hex: "d9796b"), redBG: Color(hex: "3b2424"),
+        amber: Color(hex: "d2a65f"), amberLine: Color(hex: "5c4a31"), amberBG: Color(hex: "2d2518"),
+        track: Color(hex: "24343c"), cream: Color(hex: "f3ead9"),
+        hero1: Color(hex: "09141b"), hero2: Color(hex: "163a47"), hero3: Color(hex: "255566"),
+        glow1: Color(hex: "d2a65f"), glow2: Color(hex: "70adbb"), shadow: Color(hex: "000000")
+    )
+
+    static let rustDark = BookQPalette(
+        isDark: true,
+        ink: Color(hex: "f4e8d8"), ink2: Color(hex: "d0bbaa"), muted: Color(hex: "9f8776"),
+        paper: Color(hex: "1d1512"), card: Color(hex: "2a1f19"), line: Color(hex: "463329"), line2: Color(hex: "35261f"),
+        primary: Color(hex: "c76b4e"), primary2: Color(hex: "d98b6b"), accent: Color(hex: "5fa0ac"), gold: Color(hex: "d1a15b"),
+        green: Color(hex: "6fb38c"), greenBG: Color(hex: "1d3329"), red: Color(hex: "d97b67"), redBG: Color(hex: "3b2422"),
+        amber: Color(hex: "d1a15b"), amberLine: Color(hex: "6a5435"), amberBG: Color(hex: "302616"),
+        track: Color(hex: "3d2b22"), cream: Color(hex: "fbf1df"),
+        hero1: Color(hex: "3a1712"), hero2: Color(hex: "7a3428"), hero3: Color(hex: "a8533d"),
+        glow1: Color(hex: "c18a4a"), glow2: Color(hex: "5fa0ac"), shadow: Color(hex: "000000")
+    )
+
+    static let mossDark = BookQPalette(
+        isDark: true,
+        ink: Color(hex: "eef2e4"), ink2: Color(hex: "c4d1c5"), muted: Color(hex: "8b9d8f"),
+        paper: Color(hex: "101a14"), card: Color(hex: "18271e"), line: Color(hex: "2d4234"), line2: Color(hex: "23362a"),
+        primary: Color(hex: "5f9c74"), primary2: Color(hex: "7dbb8e"), accent: Color(hex: "c99655"), gold: Color(hex: "c6a269"),
+        green: Color(hex: "6fb68e"), greenBG: Color(hex: "18362a"), red: Color(hex: "d67c6c"), redBG: Color(hex: "3b2422"),
+        amber: Color(hex: "c6a269"), amberLine: Color(hex: "5f4e34"), amberBG: Color(hex: "2c2618"),
+        track: Color(hex: "2a3d30"), cream: Color(hex: "f4ecd9"),
+        hero1: Color(hex: "0c1a13"), hero2: Color(hex: "1e3b2a"), hero3: Color(hex: "315d43"),
+        glow1: Color(hex: "c6a269"), glow2: Color(hex: "5f9c74"), shadow: Color(hex: "000000")
+    )
+
+    static func of(_ theme: AppTheme, _ appearance: AppAppearance) -> BookQPalette {
+        switch (theme, appearance) {
+        case (.indigo, .light): return indigoLight
+        case (.indigo, .dark): return indigoDark
+        case (.rust, .light): return rustLight
+        case (.rust, .dark): return rustDark
+        case (.moss, .light): return mossLight
+        case (.moss, .dark): return mossDark
+        }
+    }
+}
+
+enum ThemeRuntime {
+    static var current: BookQPalette = .indigoLight
+
+    static func apply(theme: AppTheme, appearance: AppAppearance) {
+        current = BookQPalettes.of(theme, appearance)
+    }
+}
+
 enum Palette {
-    static let ink = Color(hex: "16232f")
-    static let ink2 = Color(hex: "44525f")
-    static let muted = Color(hex: "7c8794")
-    static let paper = Color(hex: "f5f0e7")
-    static let card = Color(hex: "fffdf8")
-    static let line = Color(hex: "e5dccb")
-    static let line2 = Color(hex: "efe7d8")
-    static let primary = Color(hex: "1a455c")
-    static let primary2 = Color(hex: "2a6b80")
-    static let accent = Color(hex: "b9613c")
-    static let gold = Color(hex: "bd9350")
-    static let green = Color(hex: "1c7a5b")
-    static let greenBG = Color(hex: "e4f2ea")
-    static let red = Color(hex: "ab3a2c")
-    static let redBG = Color(hex: "fae8e3")
-    static let amber = Color(hex: "8a6a2f")
-    static let amberLine = Color(hex: "d9bd8c")
-    static let amberBG = Color(hex: "fbf3e3")
-    static let track = Color(hex: "eee7d9")
-    static let cream = Color(hex: "f6efe2")
+    static var isDark: Bool { ThemeRuntime.current.isDark }
+    static var ink: Color { ThemeRuntime.current.ink }
+    static var ink2: Color { ThemeRuntime.current.ink2 }
+    static var muted: Color { ThemeRuntime.current.muted }
+    static var paper: Color { ThemeRuntime.current.paper }
+    static var card: Color { ThemeRuntime.current.card }
+    static var line: Color { ThemeRuntime.current.line }
+    static var line2: Color { ThemeRuntime.current.line2 }
+    static var primary: Color { ThemeRuntime.current.primary }
+    static var primary2: Color { ThemeRuntime.current.primary2 }
+    static var accent: Color { ThemeRuntime.current.accent }
+    static var gold: Color { ThemeRuntime.current.gold }
+    static var green: Color { ThemeRuntime.current.green }
+    static var greenBG: Color { ThemeRuntime.current.greenBG }
+    static var red: Color { ThemeRuntime.current.red }
+    static var redBG: Color { ThemeRuntime.current.redBG }
+    static var amber: Color { ThemeRuntime.current.amber }
+    static var amberLine: Color { ThemeRuntime.current.amberLine }
+    static var amberBG: Color { ThemeRuntime.current.amberBG }
+    static var track: Color { ThemeRuntime.current.track }
+    static var cream: Color { ThemeRuntime.current.cream }
+    static var hero1: Color { ThemeRuntime.current.hero1 }
+    static var hero2: Color { ThemeRuntime.current.hero2 }
+    static var hero3: Color { ThemeRuntime.current.hero3 }
+    static var glow1: Color { ThemeRuntime.current.glow1 }
+    static var glow2: Color { ThemeRuntime.current.glow2 }
+    static var shadow: Color { ThemeRuntime.current.shadow }
 }
 
 extension Color {
@@ -103,13 +233,13 @@ struct PaperBackground: View {
         ZStack {
             Palette.paper
             RadialGradient(
-                colors: [Color(hex: "efe2cd").opacity(0.95), Color.clear],
+                colors: [Palette.glow1.opacity(0.10), Color.clear],
                 center: .topLeading,
                 startRadius: 0,
                 endRadius: 720
             )
             RadialGradient(
-                colors: [Color(hex: "e8eef0").opacity(0.9), Color.clear],
+                colors: [Palette.glow2.opacity(0.10), Color.clear],
                 center: .topTrailing,
                 startRadius: 0,
                 endRadius: 620
@@ -155,7 +285,7 @@ struct PillLabel: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(Color(hex: "eee6d6"))
+                Capsule().fill(Palette.track)
             )
     }
 }
@@ -220,7 +350,7 @@ struct CardSurface: ViewModifier {
                             .stroke(Palette.line, lineWidth: 1)
                     )
             )
-            .shadow(color: Color(hex: "212c36").opacity(0.16), radius: 18, x: 0, y: 12)
+            .shadow(color: Palette.shadow.opacity(0.16), radius: 18, x: 0, y: 12)
     }
 }
 
@@ -272,7 +402,7 @@ struct ChipButton: View {
                 .padding(.vertical, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(selected ? Palette.primary : Color(hex: "faf6ee"))
+                        .fill(selected ? Palette.primary : Palette.track)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(selected ? Palette.primary : Palette.line, lineWidth: 1)
@@ -292,7 +422,7 @@ struct ToastView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 20)
             .padding(.vertical, 11)
-            .background(Capsule().fill(Color(hex: "17242f").opacity(0.94)))
+            .background(Capsule().fill(Palette.isDark ? Palette.card.opacity(0.96) : Color(hex: "17242f").opacity(0.94)))
             .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
@@ -376,12 +506,12 @@ struct PaperStackArt: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "e8ddc9"))
+                .fill(Palette.line)
                 .frame(width: 150, height: 178)
                 .rotationEffect(.degrees(-7))
                 .offset(x: -20, y: 6)
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "f2e9d9"))
+                .fill(Palette.line2)
                 .frame(width: 150, height: 178)
                 .rotationEffect(.degrees(4))
                 .offset(x: 16, y: 2)

@@ -303,7 +303,7 @@ private fun NoOptionBlock(answered: Boolean, onConfirm: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(13.dp))
-            .background(Color(0xFFFBF6EC))
+            .background(Palette.AmberBg)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -527,13 +527,13 @@ private fun AnswerSheet(
 
             Column(Modifier.padding(top = 9.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Legend(Color(0xFFFAF6EE), "未作答")
-                    Legend(Color(0xFFEAF1F3), "已作答")
+                    Legend(Palette.ChipBg, "未作答")
+                    Legend(Palette.AnsweredBg, "已作答")
                     Legend(Palette.GreenBg, "答对")
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Legend(Palette.RedBg, "答错")
-                    Legend(Color(0xFFF9EFDC), "题库无答案")
+                    Legend(Palette.AmberBg, "题库无答案")
                 }
             }
 
@@ -553,11 +553,11 @@ private fun SheetCell(store: BookQStore, session: QuizSession, position: Int, mo
     val current = position == session.index
 
     val fill = when {
-        !question.hasAnswer && answer != null -> Color(0xFFF9EFDC)
+        !question.hasAnswer && answer != null -> Palette.AmberBg
         session.mode == QuizMode.PRACTICE && locked && answer == question.answer -> Palette.GreenBg
         session.mode == QuizMode.PRACTICE && locked -> Palette.RedBg
-        answer != null -> Color(0xFFEAF1F3)
-        else -> Color(0xFFFAF6EE)
+        answer != null -> Palette.AnsweredBg
+        else -> Palette.ChipBg
     }
     val textColor = when {
         !question.hasAnswer && answer != null -> Palette.Amber

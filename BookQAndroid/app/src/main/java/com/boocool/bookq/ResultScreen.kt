@@ -68,6 +68,15 @@ fun ResultScreen(store: BookQStore) {
 
     var showAll by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    val restartTitle = run {
+        val session = store.session
+        if (session?.order == QuizOrder.SEQUENTIAL) {
+            val info = store.sequenceInfo(session.scope)
+            if (info.nextIndex != null && info.remaining > 0) "继续下一批" else "重新一轮"
+        } else {
+            "再来一轮"
+        }
+    }
 
     Column(
         Modifier
@@ -118,7 +127,7 @@ fun ResultScreen(store: BookQStore) {
         Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PrimaryButton(
-                    "再来一轮",
+                    restartTitle,
                     icon = Icons.Outlined.Refresh,
                     modifier = Modifier.weight(1f)
                 ) { store.restart() }
@@ -139,10 +148,10 @@ fun ResultScreen(store: BookQStore) {
 @Composable
 private fun ScoreCard(result: QuizResult) {
     val scoreColor = when {
-        result.percent >= 90 -> Color(0xFF57B99A)
-        result.percent >= 80 -> Color(0xFF7FB2C9)
+        result.percent >= 90 -> Palette.Green
+        result.percent >= 80 -> Palette.Primary2
         result.percent >= 60 -> Palette.Gold
-        else -> Color(0xFFD98A72)
+        else -> Palette.Accent
     }
     HeroSurface {
         Row(
@@ -164,7 +173,7 @@ private fun ScoreCard(result: QuizResult) {
                 )
                 Text(
                     "${result.total} 题答对 ${result.correct} 题",
-                    style = serif(23).copy(color = Color(0xFFFFF8EC), lineHeight = 30.sp)
+                    style = serif(23).copy(color = Palette.Cream, lineHeight = 30.sp)
                 )
                 Text(
                     resultSubtitle(result),

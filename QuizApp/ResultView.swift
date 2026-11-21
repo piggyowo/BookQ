@@ -102,13 +102,13 @@ struct ResultView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "17303f"), Color(hex: "1e4a60")],
+                        colors: [Palette.hero1, Palette.hero2],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
         )
-        .shadow(color: Color(hex: "142837").opacity(0.5), radius: 28, x: 0, y: 22)
+        .shadow(color: Color.black.opacity(0.5), radius: 28, x: 0, y: 22)
     }
 
     private func donut(_ result: QuizResult) -> some View {
@@ -152,7 +152,7 @@ struct ResultView: View {
 
             Text("\(result.total) 题答对 \(result.correct) 题")
                 .font(.quizSerif(compact ? 23 : 26))
-                .foregroundColor(Color(hex: "fff8ec"))
+                .foregroundColor(Palette.cream)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(resultSubtitle(result))
@@ -180,10 +180,10 @@ struct ResultView: View {
 
     private func scoreColor(_ percent: Int) -> Color {
         switch percent {
-        case 90...: return Color(hex: "57b99a")
-        case 80..<90: return Color(hex: "7fb2c9")
+        case 90...: return Palette.green
+        case 80..<90: return Palette.primary2
         case 60..<80: return Palette.gold
-        default: return Color(hex: "d98a72")
+        default: return Palette.accent
         }
     }
 
@@ -354,7 +354,7 @@ struct ResultView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(hex: "fdfaf3"))
+                .fill(Palette.card)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(Palette.line, lineWidth: 1)
@@ -373,7 +373,7 @@ struct ResultView: View {
             Button {
                 store.restart()
             } label: {
-                Text("再来一轮")
+                Text(restartTitle)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryPillStyle())
@@ -394,6 +394,15 @@ struct ResultView: View {
             }
             .buttonStyle(GhostPillStyle())
         }
+    }
+
+    private var restartTitle: String {
+        guard store.order == .sequential else { return "再来一轮" }
+        let info = store.sequenceInfo(for: store.currentScope)
+        if info.nextIndex != nil, info.remaining > 0 {
+            return "继续下一批"
+        }
+        return "重新一轮"
     }
 
     private var totalAttemptsText: String {
@@ -545,6 +554,6 @@ struct WrongBookView: View {
                         .stroke(Palette.line, lineWidth: 1)
                 )
         )
-        .shadow(color: Color(hex: "212c36").opacity(0.14), radius: 14, x: 0, y: 9)
+        .shadow(color: Palette.shadow.opacity(0.14), radius: 14, x: 0, y: 9)
     }
 }

@@ -1,17 +1,23 @@
 package com.boocool.bookq
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import org.junit.Rule
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Calendar
 
@@ -35,6 +41,46 @@ class BookQPreviewTest {
     }
 
     @Test
+    fun homeDark() {
+        val store = store()
+        store.setTheme(AppTheme.RUST)
+        store.setAppearance(AppAppearance.DARK)
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.HOME) {
+                HomeScreen(store, onStart = {}, onWrong = {})
+            }
+        }
+    }
+
+    @Test
+    fun quizDark() {
+        val store = store()
+        store.setTheme(AppTheme.INDIGO)
+        store.setAppearance(AppAppearance.DARK)
+        val bank = store.state.banks.first()
+        val queue = bank.questions.take(10)
+        val session = QuizSession(
+            queue = queue,
+            answers = List(10) { if (it == 0) "B" else null },
+            locked = List(10) { it == 0 },
+            index = 0,
+            mode = QuizMode.PRACTICE,
+            order = QuizOrder.SEQUENTIAL,
+            scope = QuizScope.Bank(bank.id),
+            size = 10
+        )
+        store.previewField("session", session)
+        paparazzi.snapshot {
+            BookQTheme {
+                Box(Modifier.fillMaxSize()) {
+                    PaperBackground()
+                    QuizScreen(store) {}
+                }
+            }
+        }
+    }
+
+    @Test
     fun library() {
         val store = store()
         paparazzi.snapshot {
@@ -50,6 +96,143 @@ class BookQPreviewTest {
         paparazzi.snapshot {
             AppFrame(store, AppTab.SETTINGS) {
                 SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {})
+            }
+        }
+    }
+
+    @Test
+    fun settingsPractice() {
+        val store = store()
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.PRACTICE)
+            }
+        }
+    }
+
+    @Test
+    fun settingsAppearance() {
+        val store = store()
+        store.setTheme(AppTheme.INDIGO)
+        store.setAppearance(AppAppearance.LIGHT)
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.APPEARANCE)
+            }
+        }
+    }
+
+    @Test
+    fun settingsAppearanceDark() {
+        val store = store()
+        store.setTheme(AppTheme.RUST)
+        store.setAppearance(AppAppearance.DARK)
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.APPEARANCE)
+            }
+        }
+    }
+
+    @Test
+    fun sequenceCursorRemembersPosition() {
+        val store = store()
+        val bank = store.state.banks.first()
+        val scope = QuizScope.Bank(bank.id)
+        store.startQuiz(scope, QuizMode.PRACTICE, 10, QuizOrder.SEQUENTIAL)
+        assertEquals(bank.questions.first().id, store.session?.queue?.first()?.id)
+        val answer = store.session!!.queue.first().answer ?: "A"
+        store.choose(answer)
+        store.restart()
+        assertEquals(bank.questions[1].id, store.session?.queue?.first()?.id)
+    }
+
+    @Test
+    fun themePreviewLight() {
+        val store = store()
+        store.setTheme(AppTheme.INDIGO)
+        store.setAppearance(AppAppearance.LIGHT)
+        paparazzi.snapshot {
+            BookQTheme {
+                Box(Modifier.fillMaxSize().background(BookQPalettes.IndigoLight.paper)) {
+                    ThemePreviewPanel(
+                        theme = AppTheme.RUST,
+                        appearance = AppAppearance.LIGHT,
+                        currentTheme = AppTheme.INDIGO,
+                        currentAppearance = AppAppearance.LIGHT,
+                        onDismiss = {},
+                        onApply = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(640.dp)
+                            .align(Alignment.BottomCenter)
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun themePreviewDark() {
+        val store = store()
+        store.setTheme(AppTheme.INDIGO)
+        store.setAppearance(AppAppearance.LIGHT)
+        paparazzi.snapshot {
+            BookQTheme {
+                Box(Modifier.fillMaxSize().background(BookQPalettes.IndigoLight.paper)) {
+                    ThemePreviewPanel(
+                        theme = AppTheme.MOSS,
+                        appearance = AppAppearance.DARK,
+                        currentTheme = AppTheme.INDIGO,
+                        currentAppearance = AppAppearance.LIGHT,
+                        onDismiss = {},
+                        onApply = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(640.dp)
+                            .align(Alignment.BottomCenter)
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun settingsData() {
+        val store = store()
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.DATA)
+            }
+        }
+    }
+
+    @Test
+    fun settingsExperience() {
+        val store = store()
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.EXPERIENCE)
+            }
+        }
+    }
+
+    @Test
+    fun settingsAbout() {
+        val store = store()
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.ABOUT)
+            }
+        }
+    }
+
+    @Test
+    fun settingsImportHelp() {
+        val store = store()
+        paparazzi.snapshot {
+            AppFrame(store, AppTab.SETTINGS) {
+                SettingsScreen(store, onExportBackup = {}, onRestoreBackup = {}, initialPage = SettingsPage.IMPORT_HELP)
             }
         }
     }
@@ -212,13 +395,14 @@ class BookQPreviewTest {
             wrongIds = wrongIds,
             progress = progress,
             attempts = attempts,
-            recentBankId = fabric.id,
+            recentBankIds = listOf(fabric.id, uv.id),
             defaultMode = QuizMode.PRACTICE,
             defaultSize = 10,
             defaultOrder = QuizOrder.SEQUENTIAL,
             haptics = true
         )
         store.previewField("state", state)
+        Palette.apply(state.theme, state.appearance)
         return store
     }
 

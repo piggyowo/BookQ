@@ -82,7 +82,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 LinearGradient(
-                    colors: [Color(hex: "152b3a"), Color(hex: "1c455c"), Color(hex: "25596a")],
+                    colors: [Palette.hero1, Palette.hero2, Palette.hero3],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -200,7 +200,7 @@ struct HomeView: View {
 
         return ZStack(alignment: .topLeading) {
             LinearGradient(
-                colors: [Color(hex: "152b3a"), Color(hex: "1c455c"), Color(hex: "25596a")],
+                colors: [Palette.hero1, Palette.hero2, Palette.hero3],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -292,22 +292,35 @@ struct HomeView: View {
             }
 
             VStack(spacing: 0) {
-                ForEach(Array(store.banks.prefix(3))) { bank in
+                let recent = store.homeBanks
+                ForEach(Array(recent.enumerated()), id: \.element.id) { index, bank in
                     Button {
                         presetBankID = bank.id
                         showSetup = true
                     } label: {
-                        bankRow(bank)
+                        bankRow(bank, index: index)
                     }
                     .buttonStyle(.plain)
 
-                    if bank.id != store.banks.prefix(3).last?.id {
+                    if index != recent.count - 1 {
                         Rectangle()
                             .fill(Palette.line2)
                             .frame(height: 1)
-                            .padding(.leading, 54)
+                            .padding(.leading, 16)
                     }
                 }
+
+                if !recent.isEmpty {
+                    DashedDivider()
+                        .padding(.horizontal, 0)
+                }
+
+                Button {
+                    store.selectedTab = .library
+                } label: {
+                    allBanksRow
+                }
+                .buttonStyle(.plain)
             }
             .padding(.vertical, 4)
             .background(
@@ -318,33 +331,12 @@ struct HomeView: View {
                             .stroke(Palette.line, lineWidth: 1)
                     )
             )
-
-            if store.banks.count > 3 {
-                Button {
-                    store.selectedTab = .library
-                } label: {
-                    Text("查看全部 \(store.banks.count) 个题库")
-                        .font(.quizSans(12))
-                        .foregroundColor(Palette.muted)
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, 4)
-            }
         }
     }
 
-    private func bankRow(_ bank: QuizBank) -> some View {
+    private func bankRow(_ bank: QuizBank, index: Int) -> some View {
         let progress = store.bankProgress(bank)
         return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(bank.colorIndex == 0 ? Palette.primary : Palette.accent)
-                Image(systemName: "doc.text")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(Palette.cream)
-            }
-            .frame(width: 38, height: 42)
-
             VStack(alignment: .leading, spacing: 5) {
                 Text(bank.name)
                     .font(.quizSans(14, weight: .semibold))
@@ -374,7 +366,44 @@ struct HomeView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(Palette.line)
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 16)
+        .padding(.trailing, 13)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(index % 2 == 0 ? Palette.primary : Palette.accent)
+                .frame(width: 4, height: 42)
+        }
+    }
+
+    private var allBanksRow: some View {
+        HStack(spacing: 10) {
+            AllBanksShelf()
+                .frame(width: 30, height: 33)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("全部题库")
+                    .font(.quizSans(14, weight: .semibold))
+                    .foregroundColor(Palette.ink)
+                Text(store.banks.count > 3
+                     ? "共 \(store.banks.count) 个 · 最近导入 3 个"
+                     : "共 \(store.banks.count) 个")
+                    .font(.quizSans(11))
+                    .foregroundColor(Palette.muted)
+            }
+
+            Spacer(minLength: 8)
+
+            Text("查看全部")
+                .font(.quizSans(11.5, weight: .medium))
+                .foregroundColor(Palette.primary)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Palette.line)
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 13)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
     }
@@ -484,5 +513,43 @@ struct HomeView: View {
                 )
             }
         }
+    }
+}
+
+// MARK: - 主页题库标识
+
+struct DashedDivider: View {
+    var color: Color = Palette.line2
+
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0.5))
+                path.addLine(to: CGPoint(x: geometry.size.width, y: 0.5))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        }
+        .frame(height: 1)
+    }
+}
+
+struct AllBanksShelf: View {
+    var body: some View {
+        VStack(spacing: 3) {
+            HStack(alignment: .bottom, spacing: 4) {
+                bar(height: 20, color: Palette.primary)
+                bar(height: 24, color: Palette.accent)
+                bar(height: 18, color: Palette.gold)
+            }
+            Rectangle()
+                .fill(Palette.line)
+                .frame(width: 24, height: 1)
+        }
+    }
+
+    private func bar(height: CGFloat, color: Color) -> some View {
+        RoundedRectangle(cornerRadius: 1, style: .continuous)
+            .fill(color)
+            .frame(width: 4, height: height)
     }
 }

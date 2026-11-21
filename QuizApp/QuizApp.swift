@@ -9,7 +9,8 @@ struct CraftQuizApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(store.appearance == .dark ? .dark : .light)
+                .id(store.themeKey)
         }
     }
 }
