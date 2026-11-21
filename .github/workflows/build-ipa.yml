@@ -42,7 +42,10 @@ jobs:
             echo '```'
             grep -E "error:|BUILD FAILED|The following build commands failed" xcodebuild.log | tail -n 80 || true
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee /tmp/build-errors.md >> "$GITHUB_STEP_SUMMARY"
+          grep -E "error:|BUILD FAILED|The following build commands failed" xcodebuild.log | tail -n 20 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
 
       - name: Package IPA
         run: |
