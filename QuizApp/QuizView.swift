@@ -17,12 +17,24 @@ struct QuizView: View {
                     topBar
                     progressBar
                     questionCard
-                    bottomBar
                 }
                 .frame(maxWidth: 1100)
                 .padding(.horizontal, compact ? 16 : 24)
                 .padding(.bottom, 40)
                 .frame(maxWidth: .infinity)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar
+                    .padding(.horizontal, compact ? 16 : 24)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: 1100)
+                    .frame(maxWidth: .infinity)
+                    .background(Palette.paper.ignoresSafeArea(edges: .bottom))
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Palette.line)
+                            .frame(height: 1)
+                    }
             }
 
             if store.sheetOpen {
@@ -338,12 +350,6 @@ struct QuizView: View {
             .allowsHitTesting(store.index > 0)
 
             Spacer()
-
-            if !compact {
-                Text("A–D 作答 · ←/→ 切换")
-                    .font(.quizSans(11.5))
-                    .foregroundColor(Palette.muted)
-            }
 
             Button {
                 if store.index + 1 < store.queue.count {

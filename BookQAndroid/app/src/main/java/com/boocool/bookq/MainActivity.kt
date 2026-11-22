@@ -60,7 +60,6 @@ class MainActivity : ComponentActivity() {
 
 private sealed class LibrarySheet {
     data class Preview(val parsed: ParsedBank) : LibrarySheet()
-    data class Detail(val bankId: String) : LibrarySheet()
 }
 
 @Composable
@@ -77,6 +76,7 @@ private fun BookQApp(store: BookQStore) {
     var showStart by remember { mutableStateOf(false) }
     var presetBankId by remember { mutableStateOf<String?>(null) }
     var librarySheet by remember { mutableStateOf<LibrarySheet?>(null) }
+    var libraryDetail by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -122,14 +122,18 @@ private fun BookQApp(store: BookQStore) {
     }
 
     when (store.screen) {
-        Screen.HOME -> {
+        Screen.HOME, Screen.WRONG -> {
             Scaffold(
                 bottomBar = {
                     BottomTabBar(
                         selected = store.state.selectedTab,
                         bankCount = store.state.banks.size,
                         wrongCount = store.state.wrongIds.size,
-                        onSelect = { store.setTab(it) }
+                        onSelect = {
+                            if (store.screen == Screen.WRONG) store.goHome()
+                            libraryDetail = null
+                            store.setTab(it)
+                        }
                     )
                 },
                 containerColor = Color.Transparent,
@@ -138,28 +142,48 @@ private fun BookQApp(store: BookQStore) {
                 Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                     PaperBackground()
                     when (store.state.selectedTab) {
-                        AppTab.HOME -> HomeScreen(
-                            store = store,
-                            onStart = { bankId ->
-                                presetBankId = bankId
-                                showStart = true
-                            },
-                        onWrong = { store.openWrongBook() }
-                        )
-                        AppTab.LIBRARY -> LibraryScreen(
-                            store = store,
-                            onImport = {
-                                openDocument.launch(
-                                    arrayOf(
-                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                        "text/plain",
-                                        "text/markdown",
-                                        "application/json",
-                                        "*/*"
-                                    )
+                        AppTab.HOME -> PaperPushHost(
+                            page = if (store.screen == Screen.WRONG) true else null,
+                            onDismiss = { store.goHome() },
+                            root = {
+                                HomeScreen(
+                                    store = store,
+                                    onStart = { bankId ->
+                                        presetBankId = bankId
+                                        showStart = true
+                                    },
+                                    onWrong = { store.openWrongBook() }
                                 )
                             },
-                            onOpenBank = { librarySheet = LibrarySheet.Detail(it) }
+                            detail = { WrongBookScreen(store) }
+                        )
+                        AppTab.LIBRARY -> PaperPushHost(
+                            page = libraryDetail,
+                            onDismiss = { libraryDetail = null },
+                            root = {
+                                LibraryScreen(
+                                    store = store,
+                                    onImport = {
+                                        openDocument.launch(
+                                            arrayOf(
+                                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                "text/plain",
+                                                "text/markdown",
+                                                "application/json",
+                                                "*/*"
+                                            )
+                                        )
+                                    },
+                                    onOpenBank = { libraryDetail = it }
+                                )
+                            },
+                            detail = { bankId ->
+                                BankDetailPage(
+                                    store = store,
+                                    bankId = bankId,
+                                    onBack = { libraryDetail = null }
+                                )
+                            }
                         )
                         AppTab.SETTINGS -> SettingsScreen(
                             store = store,
@@ -182,12 +206,6 @@ private fun BookQApp(store: BookQStore) {
                 ResultScreen(store)
             }
         }
-        Screen.WRONG -> {
-            Box(Modifier.fillMaxSize()) {
-                PaperBackground()
-                WrongBookScreen(store)
-            }
-        }
     }
 
     if (showStart) {
@@ -204,13 +222,6 @@ private fun BookQApp(store: BookQStore) {
                     librarySheet = null
                     if (bank != null) store.showToast("已导入《${bank.name}》· ${bank.count} 题")
                 }
-            )
-        }
-        is LibrarySheet.Detail -> {
-            BankDetailSheet(
-                store = store,
-                bankId = sheet.bankId,
-                onDismiss = { librarySheet = null }
             )
         }
         null -> Unit

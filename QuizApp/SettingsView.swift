@@ -26,14 +26,18 @@ struct SettingsView: View {
     @State private var previewTheme: AppTheme?
 
     var body: some View {
-        Group {
-            if let page {
-                detailView(page)
-            } else {
-                home
+        home
+            .paperPush(
+                isPresented: Binding(
+                    get: { page != nil },
+                    set: { if !$0 { page = nil } }
+                )
+            ) {
+                if let page {
+                    detailView(page)
+                }
             }
-        }
-        .background(PaperBackground())
+            .background(PaperBackground())
         .fileImporter(isPresented: $showRestore, allowedContentTypes: [.json]) { result in
             switch result {
             case .success(let url):
@@ -169,7 +173,7 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.5"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.6"
     }
 
     // MARK: - 详情页
@@ -223,7 +227,7 @@ struct SettingsView: View {
     private func detailHeader(title: String, subtitle: String) -> some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) { page = nil }
+                page = nil
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))

@@ -81,56 +81,64 @@ fun SettingsScreen(
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        when (page) {
-            null -> SettingsHome(store, onOpen = { page = it })
-            SettingsPage.APPEARANCE -> SettingsDetail(
-                title = "外观",
-                subtitle = "主题决定布料颜色，明暗决定光线",
-                onBack = { page = null }
-            ) {
-                AppearanceSettings(store, onPreview = { previewTheme = it })
+        PaperPushHost(
+            page = page,
+            onDismiss = { page = null },
+            root = {
+                SettingsHome(store, onOpen = { page = it })
+            },
+            detail = { current ->
+                when (current) {
+                    SettingsPage.APPEARANCE -> SettingsDetail(
+                        title = "外观",
+                        subtitle = "主题决定布料颜色，明暗决定光线",
+                        onBack = { page = null }
+                    ) {
+                        AppearanceSettings(store, onPreview = { previewTheme = it })
+                    }
+                    SettingsPage.PRACTICE -> SettingsDetail(
+                        title = "练习偏好",
+                        subtitle = "默认只是起点，每次开始仍可临时调整",
+                        onBack = { page = null }
+                    ) {
+                        PracticeSettings(store)
+                    }
+                    SettingsPage.DATA -> SettingsDetail(
+                        title = "题库数据",
+                        subtitle = "备份、恢复和清理都只在本机完成",
+                        onBack = { page = null }
+                    ) {
+                        DataSettings(
+                            store = store,
+                            onExportBackup = onExportBackup,
+                            onRestoreBackup = onRestoreBackup,
+                            onClear = { confirmClear = true }
+                        )
+                    }
+                    SettingsPage.EXPERIENCE -> SettingsDetail(
+                        title = "体验与帮助",
+                        subtitle = "作答反馈和题库导入说明",
+                        onBack = { page = null }
+                    ) {
+                        ExperienceSettings(store, onOpenHelp = { page = SettingsPage.IMPORT_HELP })
+                    }
+                    SettingsPage.ABOUT -> SettingsDetail(
+                        title = "关于 BookQ",
+                        subtitle = "版本、主题与数据说明",
+                        onBack = { page = null }
+                    ) {
+                        AboutSettings(store)
+                    }
+                    SettingsPage.IMPORT_HELP -> SettingsDetail(
+                        title = "怎么导入题库",
+                        subtitle = "导入按钮只在「题库」页出现",
+                        onBack = { page = null }
+                    ) {
+                        ImportHelp()
+                    }
+                }
             }
-            SettingsPage.PRACTICE -> SettingsDetail(
-                title = "练习偏好",
-                subtitle = "默认只是起点，每次开始仍可临时调整",
-                onBack = { page = null }
-            ) {
-                PracticeSettings(store)
-            }
-            SettingsPage.DATA -> SettingsDetail(
-                title = "题库数据",
-                subtitle = "备份、恢复和清理都只在本机完成",
-                onBack = { page = null }
-            ) {
-                DataSettings(
-                    store = store,
-                    onExportBackup = onExportBackup,
-                    onRestoreBackup = onRestoreBackup,
-                    onClear = { confirmClear = true }
-                )
-            }
-            SettingsPage.EXPERIENCE -> SettingsDetail(
-                title = "体验与帮助",
-                subtitle = "作答反馈和题库导入说明",
-                onBack = { page = null }
-            ) {
-                ExperienceSettings(store, onOpenHelp = { page = SettingsPage.IMPORT_HELP })
-            }
-            SettingsPage.ABOUT -> SettingsDetail(
-                title = "关于 BookQ",
-                subtitle = "版本、主题与数据说明",
-                onBack = { page = null }
-            ) {
-                AboutSettings(store)
-            }
-            SettingsPage.IMPORT_HELP -> SettingsDetail(
-                title = "怎么导入题库",
-                subtitle = "导入按钮只在「题库」页出现",
-                onBack = { page = null }
-            ) {
-                ImportHelp()
-            }
-        }
+        )
     }
 
     if (confirmClear) {
@@ -220,7 +228,7 @@ private fun SettingsHome(store: BookQStore, onOpen: (SettingsPage) -> Unit) {
                 icon = Icons.Outlined.Palette,
                 title = "关于 BookQ",
                 detail = "版本、主题与数据说明",
-                value = "0.1.5",
+                value = "0.1.6",
                 onClick = { onOpen(SettingsPage.ABOUT) }
             )
         }
@@ -469,7 +477,7 @@ private fun AboutSettings(store: BookQStore) {
     }
 
     SettingsGroup("应用") {
-        InfoRow(Icons.Outlined.Inventory2, "版本", "0.1.5")
+        InfoRow(Icons.Outlined.Inventory2, "版本", "0.1.6")
         SettingsDivider()
         InfoRow(Icons.Outlined.FileUpload, "题库", "全部由你导入")
         SettingsDivider()

@@ -85,7 +85,7 @@ fun QuizScreen(store: BookQStore, onFinished: () -> Unit) {
                 .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 40.dp)
+                .padding(bottom = 104.dp)
         ) {
             QuizTopBar(
                 store = store,
@@ -112,20 +112,42 @@ fun QuizScreen(store: BookQStore, onFinished: () -> Unit) {
                     if (store.state.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
-            QuizBottomBar(
-                session = session,
-                onPrevious = { store.previous() },
-                onNext = {
-                    if (session.index + 1 < session.queue.size) {
-                        store.next()
-                    } else if (session.mode == QuizMode.EXAM && store.unansweredCount > 0) {
-                        confirmSubmit = true
-                    } else {
-                        store.finish()
-                        onFinished()
-                    }
-                }
+        }
+
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Palette.Paper)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Palette.Line)
             )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+            ) {
+                QuizBottomBar(
+                    session = session,
+                    onPrevious = { store.previous() },
+                    onNext = {
+                        if (session.index + 1 < session.queue.size) {
+                            store.next()
+                        } else if (session.mode == QuizMode.EXAM && store.unansweredCount > 0) {
+                            confirmSubmit = true
+                        } else {
+                            store.finish()
+                            onFinished()
+                        }
+                    }
+                )
+            }
         }
     }
 

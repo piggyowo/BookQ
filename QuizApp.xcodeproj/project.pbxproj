@@ -19,6 +19,7 @@
 		C1000000000000000000000B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000D /* SettingsView.swift */; };
 		C1000000000000000000000C /* StartQuizSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* StartQuizSheet.swift */; };
 		C1000000000000000000000D /* ImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* ImportService.swift */; };
+		C1000000000000000000000E /* PaperPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* PaperPush.swift */; };
 		C10000000000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +38,7 @@
 		B1000000000000000000000D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000E /* StartQuizSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartQuizSheet.swift; sourceTree = "<group>"; };
 		B1000000000000000000000F /* ImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportService.swift; sourceTree = "<group>"; };
+		B10000000000000000000010 /* PaperPush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperPush.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +83,7 @@
 				B1000000000000000000000D /* SettingsView.swift */,
 				B1000000000000000000000E /* StartQuizSheet.swift */,
 				B1000000000000000000000F /* ImportService.swift */,
+				B10000000000000000000010 /* PaperPush.swift */,
 				B10000000000000000000009 /* Assets.xcassets */,
 				B1000000000000000000000A /* Info.plist */,
 			);
@@ -174,6 +177,7 @@
 				C1000000000000000000000B /* SettingsView.swift in Sources */,
 				C1000000000000000000000C /* StartQuizSheet.swift in Sources */,
 				C1000000000000000000000D /* ImportService.swift in Sources */,
+				C1000000000000000000000E /* PaperPush.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -301,7 +305,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -311,7 +315,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.boocool.craftquiz;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -326,7 +330,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -336,7 +340,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.boocool.craftquiz;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

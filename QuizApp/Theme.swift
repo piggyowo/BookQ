@@ -446,6 +446,7 @@ struct BottomTabBar: View {
         HStack(spacing: 0) {
             ForEach(AppTab.allCases) { tab in
                 Button {
+                    if store.screen == .wrong { store.goHome() }
                     store.selectedTab = tab
                 } label: {
                     VStack(spacing: 4) {

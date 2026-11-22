@@ -20,18 +20,14 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            switch store.screen {
-            case .home:
-                MainTabsView()
-                    .transition(.opacity)
-            case .quiz:
+            if store.screen == .quiz {
                 QuizView()
                     .transition(.opacity)
-            case .result:
+            } else if store.screen == .result {
                 ResultView()
                     .transition(.opacity)
-            case .wrong:
-                WrongBookView()
+            } else {
+                MainTabsView()
                     .transition(.opacity)
             }
         }
@@ -47,15 +43,14 @@ struct RootView: View {
 
     private var screenKey: Int {
         switch store.screen {
-        case .home: return 0
+        case .home, .wrong: return 0
         case .quiz: return 1
         case .result: return 2
-        case .wrong: return 3
         }
     }
 
     private var toastBottom: CGFloat {
-        store.screen == .home ? 92 : 30
+        store.screen == .home || store.screen == .wrong ? 92 : 30
     }
 }
 
@@ -63,19 +58,30 @@ struct MainTabsView: View {
     @EnvironmentObject private var store: QuizStore
 
     var body: some View {
-        ZStack {
-            switch store.selectedTab {
-            case .home:
-                HomeView()
-            case .library:
-                LibraryView()
-            case .settings:
-                SettingsView()
+        tabContent
+            .paperPush(
+                isPresented: Binding(
+                    get: { store.screen == .wrong },
+                    set: { if !$0 { store.goHome() } }
+                )
+            ) {
+                WrongBookView()
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                BottomTabBar()
+            }
+            .animation(.easeInOut(duration: 0.18), value: store.selectedTab)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch store.selectedTab {
+        case .home:
+            HomeView()
+        case .library:
+            LibraryView()
+        case .settings:
+            SettingsView()
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            BottomTabBar()
-        }
-        .animation(.easeInOut(duration: 0.18), value: store.selectedTab)
     }
 }

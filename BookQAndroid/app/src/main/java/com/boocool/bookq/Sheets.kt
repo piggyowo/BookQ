@@ -1,23 +1,27 @@
 package com.boocool.bookq
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -507,10 +511,6 @@ fun BankDetailSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val bank = store.bank(bankId)
-    var showRename by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
-    var draftName by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -518,123 +518,190 @@ fun BankDetailSheet(
         containerColor = Palette.Paper,
         dragHandle = { SheetGrabber() }
     ) {
-        if (bank == null) {
-            Text("题库已不在了", style = sans(14).copy(color = Palette.Muted), modifier = Modifier.padding(24.dp))
-        } else {
-            val progress = store.bankProgress(bank)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 28.dp)
-                    .navigationBarsPadding(),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("题库详情", style = serif(24))
-                        Text(bank.fileName, style = sans(11).copy(color = Palette.Muted))
-                    }
-                    CloseCircle(onDismiss)
-                }
+        BankDetailContent(
+            store = store,
+            bankId = bankId,
+            onClose = onDismiss,
+            isSheet = true
+        )
+    }
+}
 
-                CardSurface(radius = 18.dp, padding = 16.dp) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(
-                                Modifier
-                                    .size(52.dp, 58.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (bank.colorIndex == 0) Palette.Primary else Palette.Accent),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(if (bank.colorIndex == 0) "布" else "UV", style = serif(20).copy(color = Palette.Cream))
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(bank.name, style = serif(21), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("${bank.count} 题 · 导入于 ${formatDate(bank.importedAt)}", style = sans(11).copy(color = Palette.Muted))
-                            }
-                        }
-                        ProgressTrack(progress.percent, height = 6.dp)
-                        Row {
-                            Text("已作答 ${progress.done} / ${progress.total}", style = sans(10).copy(color = Palette.Muted))
-                            Spacer(Modifier.weight(1f))
-                            Text(progress.rate?.let { "正确率 $it%" } ?: "正确率待生成", style = sans(10).copy(color = Palette.Muted))
-                        }
-                    }
-                }
+@Composable
+fun BankDetailPage(
+    store: BookQStore,
+    bankId: String,
+    onBack: () -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Palette.Paper)
+    ) {
+        BankDetailContent(
+            store = store,
+            bankId = bankId,
+            onClose = onBack,
+            isSheet = false
+        )
+    }
+}
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DetailMetric("${bank.count}", "题目", Modifier.weight(1f))
-                    DetailMetric("${store.wrongCountIn(bank)}", "错题", Modifier.weight(1f), accent = true)
-                    DetailMetric("${progress.done}", "已作答", Modifier.weight(1f))
-                }
+@Composable
+private fun BankDetailContent(
+    store: BookQStore,
+    bankId: String,
+    onClose: () -> Unit,
+    isSheet: Boolean
+) {
+    val bank = store.bank(bankId)
+    var showRename by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var draftName by remember { mutableStateOf("") }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(Palette.Primary.copy(alpha = 0.07f))
-                            .clickable {
-                                draftName = bank.name
-                                showRename = true
-                            }
-                            .padding(vertical = 11.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.Edit, contentDescription = null, tint = Palette.Primary, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("重命名", style = sans(12, FontWeight.Medium).copy(color = Palette.Primary))
-                    }
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(Palette.RedBg)
-                            .clickable { confirmDelete = true }
-                            .padding(vertical = 11.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Palette.Red, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("删除", style = sans(12, FontWeight.Medium).copy(color = Palette.Red))
-                    }
-                }
-
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Palette.Card)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text("题目预览", style = sans(12, FontWeight.SemiBold).copy(color = Palette.Ink2))
-                    bank.questions.take(5).forEach { question ->
-                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(question.num, style = sans(9, FontWeight.Medium).copy(color = Palette.Gold), modifier = Modifier.width(22.dp))
-                            Text(question.stem, style = sans(11).copy(color = Palette.Ink2), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            if (!question.hasAnswer) {
-                                Text("无答案", style = sans(9).copy(color = Palette.Accent))
-                            }
-                        }
-                    }
-                }
-
-                Text(
-                    "这里只管理题库，不提供开始入口；练习请回主页开始。",
-                    style = sans(10).copy(color = Palette.Muted),
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-        }
+    if (bank == null) {
+        Text(
+            "题库已不在了",
+            style = sans(14).copy(color = Palette.Muted),
+            modifier = Modifier.padding(24.dp)
+        )
+        return
     }
 
-    if (showRename && bank != null) {
+    val progress = store.bankProgress(bank)
+    val inset = if (isSheet) Modifier.navigationBarsPadding() else Modifier.statusBarsPadding()
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(inset)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            if (!isSheet) {
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Palette.Card)
+                        .border(1.dp, Palette.Line, CircleShape)
+                        .clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Palette.Primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+            }
+
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("题库详情", style = serif(24))
+                Text(bank.fileName, style = sans(11).copy(color = Palette.Muted))
+            }
+            if (isSheet) CloseCircle(onClose)
+        }
+
+        CardSurface(radius = 18.dp, padding = 16.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        Modifier
+                            .size(52.dp, 58.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (bank.colorIndex == 0) Palette.Primary else Palette.Accent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(if (bank.colorIndex == 0) "布" else "UV", style = serif(20).copy(color = Palette.Cream))
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(bank.name, style = serif(21), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${bank.count} 题 · 导入于 ${formatDate(bank.importedAt)}", style = sans(11).copy(color = Palette.Muted))
+                    }
+                }
+                ProgressTrack(progress.percent, height = 6.dp)
+                Row {
+                    Text("已作答 ${progress.done} / ${progress.total}", style = sans(10).copy(color = Palette.Muted))
+                    Spacer(Modifier.weight(1f))
+                    Text(progress.rate?.let { "正确率 $it%" } ?: "正确率待生成", style = sans(10).copy(color = Palette.Muted))
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            DetailMetric("${bank.count}", "题目", Modifier.weight(1f))
+            DetailMetric("${store.wrongCountIn(bank)}", "错题", Modifier.weight(1f), accent = true)
+            DetailMetric("${progress.done}", "已作答", Modifier.weight(1f))
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Palette.Primary.copy(alpha = 0.07f))
+                    .clickable {
+                        draftName = bank.name
+                        showRename = true
+                    }
+                    .padding(vertical = 11.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Edit, contentDescription = null, tint = Palette.Primary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("重命名", style = sans(12, FontWeight.Medium).copy(color = Palette.Primary))
+            }
+            Row(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Palette.RedBg)
+                    .clickable { confirmDelete = true }
+                    .padding(vertical = 11.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Palette.Red, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("删除", style = sans(12, FontWeight.Medium).copy(color = Palette.Red))
+            }
+        }
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Palette.Card)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("题目预览", style = sans(12, FontWeight.SemiBold).copy(color = Palette.Ink2))
+            bank.questions.take(5).forEach { question ->
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(question.num, style = sans(9, FontWeight.Medium).copy(color = Palette.Gold), modifier = Modifier.width(22.dp))
+                    Text(question.stem, style = sans(11).copy(color = Palette.Ink2), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (!question.hasAnswer) {
+                        Text("无答案", style = sans(9).copy(color = Palette.Accent))
+                    }
+                }
+            }
+        }
+
+        Text(
+            "这里只管理题库，不提供开始入口；练习请回主页开始。",
+            style = sans(10).copy(color = Palette.Muted),
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+
+    if (showRename) {
         AlertDialog(
             onDismissRequest = { showRename = false },
             title = { Text("重命名题库", style = serif(20)) },
@@ -657,7 +724,7 @@ fun BankDetailSheet(
         )
     }
 
-    if (confirmDelete && bank != null) {
+    if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除这个题库？", style = serif(20)) },
@@ -666,7 +733,7 @@ fun BankDetailSheet(
                 TextButton(onClick = {
                     confirmDelete = false
                     store.deleteBank(bank.id)
-                    onDismiss()
+                    onClose()
                     store.showToast("题库已删除")
                 }) { Text("删除", color = Palette.Red) }
             },

@@ -21,13 +21,11 @@ private enum LibraryFilter: String, CaseIterable, Identifiable {
 private enum LibrarySheet: Identifiable {
     case importer
     case preview(ParsedBank)
-    case detail(UUID)
 
     var id: String {
         switch self {
         case .importer: return "importer"
         case .preview(let parsed): return "preview-\(parsed.name)-\(parsed.questions.count)"
-        case .detail(let bankID): return "detail-\(bankID.uuidString)"
         }
     }
 }
@@ -36,12 +34,74 @@ struct LibraryView: View {
     @EnvironmentObject var store: QuizStore
 
     @State private var activeSheet: LibrarySheet?
+    @State private var detailBankID: UUID?
     @State private var importError: String?
     @State private var loading = false
     @State private var search = ""
     @State private var filter: LibraryFilter = .all
 
     var body: some View {
+        libraryHome
+            .paperPush(
+                isPresented: Binding(
+                    get: { detailBankID != nil },
+                    set: { if !$0 { detailBankID = nil } }
+                )
+            ) {
+                if let detailBankID {
+                    BankDetailView(bankID: detailBankID) {
+                        self.detailBankID = nil
+                    }
+                }
+            }
+            .overlay {
+                if loading {
+                    ZStack {
+                        Color.black.opacity(0.18).ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(Palette.primary)
+                            Text("正在解析题库…")
+                                .font(.quizSans(13))
+                                .foregroundColor(Palette.ink2)
+                        }
+                        .padding(24)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Palette.card))
+                    }
+                }
+            }
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .importer:
+                    DocumentPickerView(types: importTypes, onPick: { url in
+                        activeSheet = nil
+                        // 等系统选择器完全收起后再开始解析，避免弹层互相抢占。
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            importFile(url)
+                        }
+                    }, onCancel: {
+                        activeSheet = nil
+                    })
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+
+                case .preview(let parsed):
+                    ImportPreviewView(parsed: parsed)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.hidden)
+                }
+            }
+            .alert("导入失败", isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button("知道了") { importError = nil }
+            } message: {
+                Text(importError ?? "")
+            }
+    }
+
+    private var libraryHome: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 topBar
@@ -61,56 +121,6 @@ struct LibraryView: View {
             .padding(.bottom, 26)
         }
         .background(PaperBackground())
-        .overlay {
-            if loading {
-                ZStack {
-                    Color.black.opacity(0.18).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .tint(Palette.primary)
-                        Text("正在解析题库…")
-                            .font(.quizSans(13))
-                            .foregroundColor(Palette.ink2)
-                    }
-                    .padding(24)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Palette.card))
-                }
-            }
-        }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .importer:
-                DocumentPickerView(types: importTypes, onPick: { url in
-                    activeSheet = nil
-                    // 等系统选择器完全收起后再开始解析，避免弹层互相抢占。
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        importFile(url)
-                    }
-                }, onCancel: {
-                    activeSheet = nil
-                })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-
-            case .preview(let parsed):
-                ImportPreviewView(parsed: parsed)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
-
-            case .detail(let bankID):
-                BankDetailView(bankID: bankID)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
-            }
-        }
-        .alert("导入失败", isPresented: Binding(
-            get: { importError != nil },
-            set: { if !$0 { importError = nil } }
-        )) {
-            Button("知道了") { importError = nil }
-        } message: {
-            Text(importError ?? "")
-        }
     }
 
     // MARK: - 顶栏
@@ -332,7 +342,7 @@ struct LibraryView: View {
     private func bankCard(_ bank: QuizBank) -> some View {
         let progress = store.bankProgress(bank)
         return Button {
-            activeSheet = .detail(bank.id)
+            detailBankID = bank.id
         } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
@@ -711,9 +721,9 @@ struct ImportPreviewView: View {
 
 struct BankDetailView: View {
     @EnvironmentObject var store: QuizStore
-    @Environment(\.dismiss) private var dismiss
 
     let bankID: UUID
+    let onBack: () -> Void
 
     @State private var showRename = false
     @State private var confirmDelete = false
@@ -725,9 +735,20 @@ struct BankDetailView: View {
             if let bank = store.bank(id: bankID) {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
-                        SheetGrabber().frame(maxWidth: .infinity)
+                        HStack(alignment: .top, spacing: 12) {
+                            Button { onBack() } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Palette.primary)
+                                    .frame(width: 34, height: 34)
+                                    .background(
+                                        Circle()
+                                            .fill(Palette.card)
+                                            .overlay(Circle().stroke(Palette.line, lineWidth: 1))
+                                    )
+                            }
+                            .buttonStyle(.plain)
 
-                        HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("题库详情")
                                     .font(.quizSerif(24))
@@ -737,14 +758,6 @@ struct BankDetailView: View {
                                     .foregroundColor(Palette.muted)
                             }
                             Spacer()
-                            Button { dismiss() } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(Palette.ink2)
-                                    .frame(width: 30, height: 30)
-                                    .background(Circle().fill(Palette.card).overlay(Circle().stroke(Palette.line, lineWidth: 1)))
-                            }
-                            .buttonStyle(.plain)
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
@@ -889,7 +902,7 @@ struct BankDetailView: View {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
                 store.deleteBank(id: bankID)
-                dismiss()
+                onBack()
                 store.showToast("题库已删除")
             }
         } message: {
