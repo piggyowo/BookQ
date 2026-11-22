@@ -338,8 +338,8 @@ enum ImportService {
             }
             rebuilt += "（　）"
             last = match.range.location + match.range.length
-        rebuilt += nsStem.substring(from: last)
         }
+        rebuilt += nsStem.substring(from: last)
         stem = rebuilt.replacingOccurrences(of: "\t", with: " ")
         while stem.contains("  ") { stem = stem.replacingOccurrences(of: "  ", with: " ") }
         stem = stem.trimmingCharacters(in: .whitespacesAndNewlines)
