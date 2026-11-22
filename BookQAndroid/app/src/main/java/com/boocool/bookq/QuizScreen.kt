@@ -297,7 +297,9 @@ private fun QuestionCard(
                 modifier = Modifier.padding(top = 18.dp, bottom = 24.dp)
             )
 
-            if (question.options.isEmpty()) {
+            if (question.isFill) {
+                FillBlankBlock(question = question, revealed = answer != null, onReveal = { onChoose("FILL") })
+            } else if (question.options.isEmpty()) {
                 NoOptionBlock(answered = answer != null, onConfirm = { onChoose("NA") })
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -335,6 +337,36 @@ private fun NoOptionBlock(answered: Boolean, onConfirm: () -> Unit) {
             Text("已确认：题库中无答案", style = sans(13, FontWeight.SemiBold).copy(color = Palette.Amber))
         } else {
             GhostPillButton("确认作答（题库无答案）", onClick = onConfirm)
+        }
+    }
+}
+
+@Composable
+private fun FillBlankBlock(
+    question: Question,
+    revealed: Boolean,
+    onReveal: () -> Unit
+) {
+    val shape = RoundedCornerShape(13.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Palette.SoftPaper)
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("填空题", style = sans(12, FontWeight.SemiBold).copy(color = Palette.Accent))
+        if (revealed) {
+            Text("参考答案", style = sans(11).copy(color = Palette.Muted))
+            Text(
+                question.answerText.ifBlank { "题库未提供答案" },
+                style = sans(16, FontWeight.SemiBold).copy(color = Palette.Ink)
+            )
+            Text("本题不计入对错与正确率", style = sans(11).copy(color = Palette.Muted))
+        } else {
+            GhostPillButton("点击查看答案", onClick = onReveal)
+            Text("查看后不计入对错与正确率", style = sans(11).copy(color = Palette.Muted))
         }
     }
 }
@@ -430,6 +462,7 @@ private fun visualFor(
 
 @Composable
 private fun NoteBar(question: Question, answer: String?, mode: QuizMode, locked: Boolean) {
+    if (question.isFill) return
     if (mode == QuizMode.PRACTICE && locked) {
         val (color, content) = when {
             !question.hasAnswer -> Palette.Amber to "题库中无答案，本题不计分"
@@ -575,6 +608,8 @@ private fun SheetCell(store: BookQStore, session: QuizSession, position: Int, mo
     val current = position == session.index
 
     val fill = when {
+        question.isFill && answer != null -> Palette.AnsweredBg
+        question.isFill -> Palette.ChipBg
         !question.hasAnswer && answer != null -> Palette.AmberBg
         session.mode == QuizMode.PRACTICE && locked && answer == question.answer -> Palette.GreenBg
         session.mode == QuizMode.PRACTICE && locked -> Palette.RedBg
@@ -582,6 +617,8 @@ private fun SheetCell(store: BookQStore, session: QuizSession, position: Int, mo
         else -> Palette.ChipBg
     }
     val textColor = when {
+        question.isFill && answer != null -> Palette.Primary
+        question.isFill -> Palette.Ink2
         !question.hasAnswer && answer != null -> Palette.Amber
         session.mode == QuizMode.PRACTICE && locked && answer == question.answer -> Palette.Green
         session.mode == QuizMode.PRACTICE && locked -> Palette.Red

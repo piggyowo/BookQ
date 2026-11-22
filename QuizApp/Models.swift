@@ -59,6 +59,7 @@ struct Question: Codable, Identifiable, Hashable {
     /// [["A", "选项内容"], ...]
     let options: [[String]]
     let answer: String?
+    let kind: String?
 
     var keys: [String] {
         options.compactMap { $0.count >= 2 ? $0[0] : nil }
@@ -71,19 +72,26 @@ struct Question: Codable, Identifiable, Hashable {
         return option[1]
     }
 
+    var isFill: Bool { kind == "fill" }
+    var isJudgment: Bool { kind == "judgment" }
+    var isGraded: Bool { !isFill && hasAnswer }
+
     var hasAnswer: Bool {
+        if isFill { return !(answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard let answer = answer, !answer.isEmpty else { return false }
         return keys.contains(answer)
     }
 
     var answerText: String {
+        if isFill { return answer ?? "" }
         guard let answer = answer else { return "" }
         return text(for: answer)
     }
 
     var metaLine: String {
-        let optionText = options.isEmpty ? "无选项" : "\(options.count) 个选项"
-        return "题库第 \(num) 题 · \(optionText)" + (hasAnswer ? "" : " · 题库无答案")
+        if isFill { return "题库第 \(num) 题 · 填空题 · 点击查看答案" }
+        let typeText = isJudgment ? "判断题" : "\(options.count) 个选项"
+        return "题库第 \(num) 题 · \(typeText)" + (hasAnswer ? "" : " · 题库无答案")
     }
 }
 
@@ -274,6 +282,7 @@ struct QuizResult {
     let mode: QuizMode
     let items: [ResultItem]
     let chapterStats: [ChapterStat]
+    let fillCount: Int
 
     var percent: Int {
         total == 0 ? 0 : Int((Double(correct) / Double(total) * 100).rounded())
@@ -297,6 +306,7 @@ struct ParsedQuestion {
     let stem: String
     let options: [[String]]
     let answer: String?
+    let kind: String
 }
 
 struct ParsedBank: Identifiable {

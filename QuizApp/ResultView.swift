@@ -33,6 +33,13 @@ struct ResultView: View {
                 statGrid(result)
                     .padding(.top, 16)
 
+                if result.fillCount > 0 {
+                    Text("另有 \(result.fillCount) 道填空题仅查看答案，未计入对错与正确率")
+                        .font(.quizSans(11))
+                        .foregroundColor(Palette.muted)
+                        .padding(.top, 10)
+                }
+
                 if !result.chapterStats.isEmpty {
                     SectionHeader(title: "分类掌握度", trailing: "本轮作答")
                         .padding(.top, 34)

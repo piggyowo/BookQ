@@ -180,7 +180,11 @@ struct QuizView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 24)
 
-                if question.options.isEmpty {
+                if question.isFill {
+                    fillBlankBlock(question: question, revealed: answer != nil) {
+                        store.choose("FILL")
+                    }
+                } else if question.options.isEmpty {
                     noOptionBlock(answered: answer != nil)
                 } else {
                     VStack(spacing: 11) {
@@ -259,6 +263,43 @@ struct QuizView: View {
         )
     }
 
+    private func fillBlankBlock(question: Question, revealed: Bool, onReveal: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("填空题")
+                .font(.quizSans(12, weight: .semibold))
+                .foregroundColor(Palette.accent)
+            if revealed {
+                Text("参考答案")
+                    .font(.quizSans(11))
+                    .foregroundColor(Palette.muted)
+                Text(question.answerText.isEmpty ? "题库未提供答案" : question.answerText)
+                    .font(.quizSans(16, weight: .semibold))
+                    .foregroundColor(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("本题不计入对错与正确率")
+                    .font(.quizSans(11))
+                    .foregroundColor(Palette.muted)
+            } else {
+                Button("点击查看答案", action: onReveal)
+                    .buttonStyle(GhostPillStyle())
+                Text("查看后不计入对错与正确率")
+                    .font(.quizSans(11))
+                    .foregroundColor(Palette.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(Palette.cream)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(Palette.line, lineWidth: 1)
+                )
+        )
+    }
+
     // MARK: - 选项状态
 
     private func visual(for key: String,
@@ -283,7 +324,9 @@ struct QuizView: View {
 
     @ViewBuilder
     private func noteView(question: Question, answer: String?, locked: Bool) -> some View {
-        if store.mode == .practice && locked {
+        if question.isFill {
+            EmptyView()
+        } else if store.mode == .practice && locked {
             if !question.hasAnswer {
                 noteBar(
                     icon: "questionmark",
@@ -474,7 +517,13 @@ struct QuizView: View {
         var fill = Palette.track
         var textColor = Palette.ink2
 
-        if !question.hasAnswer, answer != nil {
+        if question.isFill, answer != nil {
+            fill = Palette.line2
+            textColor = Palette.primary
+        } else if question.isFill {
+            fill = Palette.track
+            textColor = Palette.ink2
+        } else if !question.hasAnswer, answer != nil {
             fill = Palette.amberBG
             textColor = Palette.amber
         } else if store.mode == .practice && locked {

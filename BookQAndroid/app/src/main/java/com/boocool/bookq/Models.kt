@@ -21,17 +21,23 @@ data class Question(
     val num: String,
     val stem: String,
     val options: List<List<String>>,
-    val answer: String?
+    val answer: String?,
+    val kind: String = "choice"
 ) {
     val keys: List<String> get() = options.mapNotNull { it.firstOrNull() }
+
+    val isFill: Boolean get() = kind == "fill"
+    val isJudgment: Boolean get() = kind == "judgment"
+    /** 填空题只展示答案，不参与对错、正确率和错题本。 */
+    val isGraded: Boolean get() = !isFill && hasAnswer
 
     fun textFor(key: String): String =
         options.firstOrNull { it.firstOrNull() == key }?.getOrNull(1).orEmpty()
 
     val hasAnswer: Boolean
-        get() = answer != null && answer.isNotEmpty() && keys.contains(answer)
+        get() = if (isFill) !answer.isNullOrBlank() else answer != null && answer.isNotEmpty() && keys.contains(answer)
 
-    val answerText: String get() = answer?.let(::textFor).orEmpty()
+    val answerText: String get() = if (isFill) answer.orEmpty() else answer?.let(::textFor).orEmpty()
 
     val answerDisplay: String
         get() {
@@ -44,8 +50,9 @@ data class Question(
 
     val metaLine: String
         get() {
-            val optionText = if (options.isEmpty()) "无选项" else "${options.size} 个选项"
-            return "题库第 $num 题 · $optionText" + if (hasAnswer) "" else " · 题库无答案"
+            if (isFill) return "题库第 $num 题 · 填空题 · 点击查看答案"
+            val typeText = if (isJudgment) "判断题" else "${options.size} 个选项"
+            return "题库第 $num 题 · $typeText" + if (hasAnswer) "" else " · 题库无答案"
         }
 }
 
@@ -115,7 +122,8 @@ data class QuizResult(
     val scopeLabel: String,
     val mode: QuizMode,
     val items: List<ResultItem>,
-    val chapterStats: List<ChapterStat>
+    val chapterStats: List<ChapterStat>,
+    val fillCount: Int = 0
 ) {
     val percent: Int get() = if (total == 0) 0 else ((correct.toDouble() / total) * 100).toInt()
 
@@ -133,7 +141,8 @@ data class ParsedQuestion(
     val num: String,
     val stem: String,
     val options: List<List<String>>,
-    val answer: String?
+    val answer: String?,
+    val kind: String = "choice"
 )
 
 data class ParsedBank(
@@ -145,8 +154,10 @@ data class ParsedBank(
     val questionCount: Int get() = questions.size
     val noAnswerCount: Int
         get() = questions.count { q ->
-            q.answer == null || q.options.none { it.firstOrNull() == q.answer }
+            q.kind != "fill" && (q.answer == null || q.options.none { it.firstOrNull() == q.answer })
         }
+    val fillCount: Int get() = questions.count { it.kind == "fill" }
+    val judgmentCount: Int get() = questions.count { it.kind == "judgment" }
 }
 
 // MARK: - 顺序做题

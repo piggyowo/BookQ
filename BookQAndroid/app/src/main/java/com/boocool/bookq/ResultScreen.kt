@@ -103,6 +103,14 @@ fun ResultScreen(store: BookQStore) {
             }
         }
 
+        if (result.fillCount > 0) {
+            Text(
+                "另有 ${result.fillCount} 道填空题仅查看答案，未计入对错与正确率",
+                style = sans(11).copy(color = Palette.Muted),
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+
         if (result.chapterStats.isNotEmpty()) {
             Column(Modifier.padding(top = 34.dp, bottom = 14.dp)) {
                 SectionHeader("分类掌握度", "本轮作答")

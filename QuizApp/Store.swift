@@ -244,7 +244,8 @@ final class QuizStore: ObservableObject {
                 num: pair.element.num,
                 stem: pair.element.stem,
                 options: pair.element.options,
-                answer: pair.element.answer
+                answer: pair.element.answer,
+                kind: pair.element.kind
             )
         }
         let bank = QuizBank(
@@ -278,7 +279,8 @@ final class QuizStore: ObservableObject {
                 num: question.num,
                 stem: question.stem,
                 options: question.options,
-                answer: question.answer
+                answer: question.answer,
+                kind: question.kind
             )
         }
         if case .bank(let activeID) = currentScope, activeID == id {
@@ -524,12 +526,16 @@ final class QuizStore: ObservableObject {
 
     var unansweredCount: Int {
         zip(queue, answers).filter { pair in
-            pair.0.hasAnswer && pair.1 == nil
+            pair.0.isGraded && pair.1 == nil
         }.count
     }
 
     var noAnswerCount: Int {
-        queue.filter { !$0.hasAnswer }.count
+        queue.filter { !$0.isFill && !$0.hasAnswer }.count
+    }
+
+    var fillCount: Int {
+        queue.filter { $0.isFill }.count
     }
 
     // MARK: - 交卷
@@ -538,7 +544,7 @@ final class QuizStore: ObservableObject {
         guard !queue.isEmpty else { return }
 
         if mode == .exam {
-            for (position, question) in queue.enumerated() where question.hasAnswer {
+            for (position, question) in queue.enumerated() where question.isGraded {
                 guard let choice = answers[position] else { continue }
                 let correct = choice == question.answer
                 var item = progress[question.id] ?? QuestionProgress(attempts: 0, correct: 0)
@@ -560,7 +566,7 @@ final class QuizStore: ObservableObject {
         }
 
         var items: [ResultItem] = []
-        for (position, question) in queue.enumerated() where question.hasAnswer {
+        for (position, question) in queue.enumerated() where question.isGraded {
             if mode == .practice {
                 guard let choice = answers[position] else { continue }
                 items.append(ResultItem(question: question, choice: choice))
@@ -577,9 +583,10 @@ final class QuizStore: ObservableObject {
         let total = items.count
         let correct = items.filter(\.isCorrect).count
         let unanswered = mode == .exam
-            ? zip(queue, answers).filter { $0.0.hasAnswer && $0.1 == nil }.count
+            ? zip(queue, answers).filter { $0.0.isGraded && $0.1 == nil }.count
             : 0
-        let noAnswerCount = queue.filter { !$0.hasAnswer }.count
+        let noAnswerCount = queue.filter { !$0.isFill && !$0.hasAnswer }.count
+        let fillCount = queue.filter { $0.isFill }.count
         let duration = Date().timeIntervalSince(startTime)
 
         var statsByChapter: [String: (correct: Int, total: Int)] = [:]
@@ -616,7 +623,8 @@ final class QuizStore: ObservableObject {
             scopeLabel: scopeLabel,
             mode: mode,
             items: items,
-            chapterStats: chapterStats
+            chapterStats: chapterStats,
+            fillCount: fillCount
         )
         sheetOpen = false
         screen = .result

@@ -204,7 +204,8 @@ class BookQStore(private val context: Context) {
                 num = q.num,
                 stem = q.stem,
                 options = q.options,
-                answer = q.answer
+                answer = q.answer,
+                kind = q.kind
             )
         }
         val bank = QuizBank(id = id, name = unique, fileName = fileName, questions = questions)
@@ -395,6 +396,20 @@ class BookQStore(private val context: Context) {
 
         if (s.mode == QuizMode.PRACTICE && s.locked[s.index]) return
 
+        if (question.isFill) {
+            val answers = s.answers.toMutableList()
+            val locked = s.locked.toMutableList()
+            if (s.mode == QuizMode.PRACTICE) {
+                answers[s.index] = "FILL"
+                locked[s.index] = true
+                advanceCursorIfCurrent(question.id, s.scope)
+            } else {
+                answers[s.index] = if (answers[s.index] == "FILL") null else "FILL"
+            }
+            session = s.copy(answers = answers, locked = locked)
+            return
+        }
+
         if (question.options.isEmpty()) {
             val answers = s.answers.toMutableList()
             val locked = s.locked.toMutableList()
@@ -462,11 +477,11 @@ class BookQStore(private val context: Context) {
     val unansweredCount: Int
         get() {
             val s = session ?: return 0
-            return s.queue.indices.count { i -> s.queue[i].hasAnswer && s.answers[i] == null }
+            return s.queue.indices.count { i -> s.queue[i].isGraded && s.answers[i] == null }
         }
 
     val noAnswerCount: Int
-        get() = session?.queue?.count { !it.hasAnswer } ?: 0
+        get() = session?.queue?.count { !it.isFill && !it.hasAnswer } ?: 0
 
     fun finish() {
         val s = session ?: return
@@ -477,7 +492,7 @@ class BookQStore(private val context: Context) {
 
         if (s.mode == QuizMode.EXAM) {
             s.queue.forEachIndexed { index, question ->
-                if (!question.hasAnswer || s.answers[index] == null) return@forEachIndexed
+                if (!question.isGraded || s.answers[index] == null) return@forEachIndexed
                 val correct = s.answers[index] == question.answer
                 val old = progress[question.id] ?: QuestionProgress()
                 progress = progress + (question.id to old.copy(
@@ -494,7 +509,7 @@ class BookQStore(private val context: Context) {
         }
 
         val items = s.queue.mapIndexedNotNull { index, question ->
-            if (!question.hasAnswer) return@mapIndexedNotNull null
+            if (!question.isGraded) return@mapIndexedNotNull null
             if (s.mode == QuizMode.PRACTICE && s.answers[index] == null) return@mapIndexedNotNull null
             ResultItem(question, s.answers[index])
         }
@@ -507,9 +522,10 @@ class BookQStore(private val context: Context) {
         val total = items.size
         val correct = items.count { it.isCorrect }
         val unanswered = if (s.mode == QuizMode.EXAM) {
-            s.queue.indices.count { i -> s.queue[i].hasAnswer && s.answers[i] == null }
+            s.queue.indices.count { i -> s.queue[i].isGraded && s.answers[i] == null }
         } else 0
-        val noAnswerCount = s.queue.count { !it.hasAnswer }
+        val noAnswerCount = s.queue.count { !it.isFill && !it.hasAnswer }
+        val fillCount = s.queue.count { it.isFill }
         val duration = (System.currentTimeMillis() - s.startTime) / 1000
 
         val order = mutableListOf<String>()
@@ -546,7 +562,8 @@ class BookQStore(private val context: Context) {
             scopeLabel = scopeLabel(s.scope),
             mode = s.mode,
             items = items,
-            chapterStats = chapterStats
+            chapterStats = chapterStats,
+            fillCount = fillCount
         )
         screen = Screen.RESULT
     }
@@ -846,6 +863,7 @@ class BookQStore(private val context: Context) {
                         }
                     })
                     if (q.answer == null) put("answer", JSONObject.NULL) else put("answer", q.answer)
+                    put("kind", q.kind)
                 })
             }
         })
@@ -872,7 +890,8 @@ class BookQStore(private val context: Context) {
                 num = q.optString("num").ifBlank { "${i + 1}" },
                 stem = q.optString("stem"),
                 options = options,
-                answer = if (q.isNull("answer")) null else q.optString("answer").takeIf { it.isNotBlank() }
+                answer = if (q.isNull("answer")) null else q.optString("answer").takeIf { it.isNotBlank() },
+                kind = q.optString("kind").ifBlank { "choice" }
             )
         }
         return QuizBank(
