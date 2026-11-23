@@ -14,6 +14,9 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
     let detail: () -> Detail
 
     @State private var isDetailVisible = false
+    // 详情页关闭时，调用方通常已经把数据置空；这里必须保留最后一次
+    // 非空详情视图，否则返回动画一开始详情就变成 EmptyView，看起来像瞬移。
+    @State private var cachedDetail: Detail?
     @State private var progress: CGFloat = 0
     @State private var dragOffset: CGFloat = 0
     @State private var isDraggingBack = false
@@ -45,8 +48,8 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
                     }
                     .allowsHitTesting(!isDetailVisible)
 
-                if isDetailVisible {
-                    detail()
+                if isDetailVisible, let cachedDetail {
+                    cachedDetail
                         .frame(width: geo.size.width, height: geo.size.height)
                         .offset(x: (1 - progress) * w + dragOffset)
                         .compositingGroup()
@@ -61,6 +64,7 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
             .onAppear {
                 containerWidth = w
                 if isPresented && !isDetailVisible {
+                    cachedDetail = detail()
                     isDetailVisible = true
                     progress = 1
                 }
@@ -80,8 +84,11 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
 
     private func present() {
         if !isDetailVisible {
+            cachedDetail = detail()
             isDetailVisible = true
             progress = 0
+        } else {
+            cachedDetail = detail()
         }
         isClosing = false
         isDraggingBack = false
