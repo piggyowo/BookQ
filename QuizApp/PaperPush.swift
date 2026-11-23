@@ -20,10 +20,10 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
     @State private var isClosing = false
     @State private var containerWidth: CGFloat = 1
 
-    private let enterDuration: Double = 0.40
-    private let exitDuration: Double = 0.48
-    private let cancelResponse: Double = 0.38
-    private let edgeStartWidth: CGFloat = 22
+    // “系统感”参数：比原生默认略慢、阻尼更高，收尾不弹跳。
+    private let motionResponse: Double = 0.42
+    private let motionDamping: Double = 0.92
+    private let edgeStartWidth: CGFloat = 24
 
     func body(content: Content) -> some View {
         GeometryReader { geo in
@@ -35,12 +35,11 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
                 PaperBackground()
 
                 content
-                    .scaleEffect(1 - 0.040 * effective, anchor: .leading)
-                    .offset(x: -w * 0.18 * effective)
-                    .opacity(1 - Double(0.11 * effective))
+                    .scaleEffect(1 - 0.016 * effective, anchor: .leading)
+                    .offset(x: -w * 0.10 * effective)
                     .overlay {
                         Color.black
-                            .opacity(Double(0.11 * effective))
+                            .opacity(Double(0.055 * effective))
                             .ignoresSafeArea()
                             .allowsHitTesting(false)
                     }
@@ -50,13 +49,8 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
                     detail()
                         .frame(width: geo.size.width, height: geo.size.height)
                         .offset(x: (1 - progress) * w + dragOffset)
-                        .shadow(color: Color.black.opacity(0.14), radius: 10, x: -4, y: 0)
-                        .overlay(alignment: .leading) {
-                            Rectangle()
-                                .fill(Palette.gold.opacity(0.18))
-                                .frame(width: 1)
-                                .allowsHitTesting(false)
-                        }
+                        .compositingGroup()
+                        .shadow(color: Color.black.opacity(0.11), radius: 11, x: 3, y: 0)
                         // 手势必须挂在详情页上，但坐标要用屏幕坐标。
                         // 如果继续用 .local，详情页被 offset 后坐标系跟着移动，
                         // 手指不动页面在动，就会产生来回拉扯的卡顿。
@@ -93,7 +87,7 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
         isDraggingBack = false
         dragOffset = 0
         DispatchQueue.main.async {
-            withAnimation(.timingCurve(0.18, 0.84, 0.16, 1, duration: enterDuration)) {
+            withAnimation(.spring(response: motionResponse, dampingFraction: motionDamping, blendDuration: 0)) {
                 progress = 1
             }
         }
@@ -106,15 +100,12 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
         let width = max(containerWidth, 1)
         // 交互式 pop 的完成时长跟剩余距离相关：已经拖到很右边时，
         // 不应该再从很慢的速度走完全程。
-        let remaining = min(max((width - dragOffset) / width, 0.16), 1)
-        let duration = max(0.24, exitDuration * Double(remaining))
-
-        withAnimation(.timingCurve(0.32, 0.70, 0.10, 1, duration: duration)) {
+        withAnimation(.spring(response: motionResponse, dampingFraction: motionDamping, blendDuration: 0)) {
             progress = 0
             dragOffset = 0
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + motionResponse + 0.18) {
             guard !isPresented else { return }
             isDetailVisible = false
             isClosing = false
@@ -141,21 +132,26 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
                 }
 
                 guard isDraggingBack else { return }
-                dragOffset = min(max(dx, 0), width)
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    dragOffset = min(max(dx, 0), width)
+                }
             }
             .onEnded { value in
                 guard isDraggingBack else { return }
                 isDraggingBack = false
 
                 let dx = min(max(value.translation.width, 0), width)
-                let projected = value.predictedEndTranslation.width
+                // 只取系统预测速度的一小段（0.12s），避免轻甩就误判返回。
+                let projected = dx + max(0, value.predictedEndTranslation.width - dx) * 0.24
 
-                if dx > width * 0.30 || projected > width * 0.55 {
+                if dx > width * 0.30 || projected > width * 0.52 {
                     isClosing = true
                     isPresented = false
                 } else {
                     withAnimation(
-                        .spring(response: cancelResponse, dampingFraction: 0.88, blendDuration: 0.1)
+                        .spring(response: motionResponse, dampingFraction: motionDamping, blendDuration: 0)
                     ) {
                         dragOffset = 0
                     }
