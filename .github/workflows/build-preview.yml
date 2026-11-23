@@ -67,6 +67,23 @@ jobs:
           git commit -m "Preview IPA ${GITHUB_SHA}"
           git push -f origin HEAD:preview-artifacts
 
+      - name: Publish build log to preview branch
+        if: always()
+        continue-on-error: true
+        run: |
+          test -f xcodebuild.log || echo "no log" > xcodebuild.log
+          mkdir -p /tmp/publish-log
+          cp xcodebuild.log /tmp/publish-log/
+          git config user.name "BookQ Preview"
+          git config user.email "preview@local"
+          git checkout --orphan preview-logs
+          git rm -rf . || true
+          mkdir -p preview
+          cp /tmp/publish-log/xcodebuild.log preview/xcodebuild.log
+          git add preview/xcodebuild.log
+          git commit -m "Preview build log ${GITHUB_SHA}"
+          git push -f origin HEAD:preview-logs
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
