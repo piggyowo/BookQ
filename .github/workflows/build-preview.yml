@@ -1,0 +1,80 @@
+name: BookQ Preview Build
+
+on:
+  push:
+    branches:
+      - preview-import-parser
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Build app (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project QuizApp.xcodeproj \
+            -scheme QuizApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee xcodebuild.log
+
+      - name: Package IPA
+        if: success()
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/QuizApp.app"
+          test -d "$APP_PATH"
+          rm -rf Payload BookQ-preview.ipa
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr BookQ-preview.ipa Payload
+          ls -lh BookQ-preview.ipa
+
+      - name: Upload IPA
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookQ-preview-ipa
+          path: BookQ-preview.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookQ-preview-logs
+          path: xcodebuild.log
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        working-directory: BookQAndroid
+        run: ./gradlew assembleDebug --console=plain
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookQ-preview-apk
+          path: BookQAndroid/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
