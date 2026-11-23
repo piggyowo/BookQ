@@ -341,9 +341,9 @@ struct ResultView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("正确答案：\(item.question.answer ?? "")．\(item.question.answerText)")
+                Text("正确答案：\(item.question.answerDisplay)")
                     .foregroundColor(Palette.green)
-                if let choice = item.choice, choice != item.question.answer {
+                if let choice = item.choice, !item.isCorrect {
                     Text("你的选择：\(choice)")
                         .foregroundColor(Palette.red)
                         .strikethrough()
@@ -543,7 +543,7 @@ struct WrongBookView: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle")
                     .foregroundColor(Palette.green)
-                Text("正确答案：\(question.answer ?? "")．\(question.answerText)")
+                Text("正确答案：\(question.answerDisplay)")
                     .foregroundColor(Palette.green)
                     .font(.quizSans(13, weight: .semibold))
                     .lineSpacing(3)

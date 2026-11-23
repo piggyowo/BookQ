@@ -180,7 +180,7 @@ struct QuizView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 24)
 
-                if question.isFill {
+                if question.isFillLike {
                     fillBlankBlock(question: question, revealed: answer != nil) {
                         store.choose("FILL")
                     }
@@ -199,6 +199,11 @@ struct QuizView: View {
                             ) {
                                 store.choose(key)
                             }
+                        }
+                        if question.isMulti && store.mode == .practice && !isLocked {
+                            Button("提交本题") { store.submitMulti() }
+                                .buttonStyle(GhostPillStyle())
+                                .padding(.top, 5)
                         }
                     }
                 }
@@ -265,7 +270,7 @@ struct QuizView: View {
 
     private func fillBlankBlock(question: Question, revealed: Bool, onReveal: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("填空题")
+            Text(question.isShort ? "简答题" : "填空题")
                 .font(.quizSans(12, weight: .semibold))
                 .foregroundColor(Palette.accent)
             if revealed {
@@ -306,6 +311,18 @@ struct QuizView: View {
                         question: Question,
                         answer: String?,
                         locked: Bool) -> OptionVisual {
+        let selected = answer ?? ""
+        if question.isMulti {
+            if !question.hasAnswer {
+                return selected.contains(key) ? .noAnswer : .normal
+            }
+            if store.mode == .exam || !locked {
+                return selected.contains(key) ? .selected : .normal
+            }
+            if question.answerKeys.contains(key) { return .correct }
+            if selected.contains(key) { return .wrong }
+            return .dim
+        }
         if !question.hasAnswer {
             return answer == key ? .noAnswer : .normal
         }
@@ -324,7 +341,7 @@ struct QuizView: View {
 
     @ViewBuilder
     private func noteView(question: Question, answer: String?, locked: Bool) -> some View {
-        if question.isFill {
+        if question.isFillLike {
             EmptyView()
         } else if store.mode == .practice && locked {
             if !question.hasAnswer {
@@ -333,7 +350,7 @@ struct QuizView: View {
                     color: Palette.amber,
                     content: "题库中无答案，本题不计分"
                 )
-            } else if answer == question.answer {
+            } else if question.isCorrect(answer) {
                 noteBar(
                     icon: "checkmark",
                     color: Palette.green,
@@ -343,7 +360,7 @@ struct QuizView: View {
                 noteBar(
                     icon: "xmark",
                     color: Palette.red,
-                    content: "回答错误，正确答案是 \(question.answer ?? "")．\(question.answerText)"
+                    content: "回答错误，正确答案是 \(question.answerDisplay)"
                 )
             }
         } else if store.mode == .exam {
@@ -517,17 +534,17 @@ struct QuizView: View {
         var fill = Palette.track
         var textColor = Palette.ink2
 
-        if question.isFill, answer != nil {
+        if question.isFillLike, answer != nil {
             fill = Palette.line2
             textColor = Palette.primary
-        } else if question.isFill {
+        } else if question.isFillLike {
             fill = Palette.track
             textColor = Palette.ink2
         } else if !question.hasAnswer, answer != nil {
             fill = Palette.amberBG
             textColor = Palette.amber
         } else if store.mode == .practice && locked {
-            if answer == question.answer {
+            if question.isCorrect(answer) {
                 fill = Palette.greenBG
                 textColor = Palette.green
             } else {

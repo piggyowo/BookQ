@@ -73,24 +73,69 @@ struct Question: Codable, Identifiable, Hashable {
     }
 
     var isFill: Bool { kind == "fill" }
+    var isShort: Bool { kind == "short" }
+    var isMulti: Bool { kind == "multi" }
     var isJudgment: Bool { kind == "judgment" }
-    var isGraded: Bool { !isFill && hasAnswer }
+    /// 填空/简答只展示答案，不参与对错、正确率和错题本。
+    var isFillLike: Bool { isFill || isShort }
+    var isGraded: Bool { !isFillLike && hasAnswer }
+
+    var answerKeys: Set<String> {
+        Set((answer ?? "").filter { "ABCD".contains($0) }.map { String($0) })
+    }
 
     var hasAnswer: Bool {
-        if isFill { return !(answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if isFillLike { return !(answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard let answer = answer, !answer.isEmpty else { return false }
+        if isMulti { return !answerKeys.isEmpty && answerKeys.allSatisfy { keys.contains($0) } }
         return keys.contains(answer)
     }
 
+    func isCorrect(_ choice: String?) -> Bool {
+        guard let choice else { return false }
+        if isMulti {
+            let selected = Set(choice.filter { "ABCD".contains($0) }.map { String($0) })
+            return selected == answerKeys
+        }
+        return choice == answer
+    }
+
     var answerText: String {
-        if isFill { return answer ?? "" }
+        if isFillLike { return answer ?? "" }
+        if isMulti {
+            return answerKeys.sorted().map { text(for: $0) }.joined(separator: "、")
+        }
         guard let answer = answer else { return "" }
         return text(for: answer)
     }
 
+    var answerDisplay: String {
+        if isFillLike { return answerText }
+        if isMulti {
+            return answerKeys.sorted().map { key in
+                let label = text(for: key).trimmingCharacters(in: .whitespacesAndNewlines)
+                return label.isEmpty ? key : "\(key). \(label)"
+            }.joined(separator: "、")
+        }
+        guard let letter = answer else { return answerText }
+        let label = answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let alreadyPrefixed = ["\(letter).", "\(letter)．", "\(letter)、", "\(letter) "]
+            .contains { label.hasPrefix($0) }
+        return (alreadyPrefixed || label.isEmpty) ? (label.isEmpty ? letter : label) : "\(letter). \(label)"
+    }
+
     var metaLine: String {
-        if isFill { return "题库第 \(num) 题 · 填空题 · 点击查看答案" }
-        let typeText = isJudgment ? "判断题" : "\(options.count) 个选项"
+        if isFillLike {
+            return "题库第 \(num) 题 · \(isShort ? "简答题" : "填空题") · 点击查看答案"
+        }
+        let typeText: String
+        if isJudgment {
+            typeText = "判断题"
+        } else if isMulti {
+            typeText = "多选题 · \(options.count) 个选项"
+        } else {
+            typeText = "\(options.count) 个选项"
+        }
         return "题库第 \(num) 题 · \(typeText)" + (hasAnswer ? "" : " · 题库无答案")
     }
 }
@@ -254,10 +299,7 @@ struct ResultItem: Identifiable {
 
     var id: String { question.id }
 
-    var isCorrect: Bool {
-        guard let choice = choice else { return false }
-        return choice == question.answer
-    }
+    var isCorrect: Bool { question.isCorrect(choice) }
 }
 
 struct ChapterStat: Identifiable {
@@ -318,7 +360,15 @@ struct ParsedBank: Identifiable {
 
     var questionCount: Int { questions.count }
     var noAnswerCount: Int { questions.filter { question in
+        if question.kind == "fill" || question.kind == "short" { return false }
         guard let answer = question.answer else { return true }
+        if question.kind == "multi" {
+            return answer.contains { letter in
+                !question.options.contains { $0.first == String(letter) }
+            }
+        }
         return !question.options.contains { $0.first == answer }
     }.count }
+    var multiCount: Int { questions.filter { $0.kind == "multi" }.count }
+    var shortCount: Int { questions.filter { $0.kind == "short" }.count }
 }

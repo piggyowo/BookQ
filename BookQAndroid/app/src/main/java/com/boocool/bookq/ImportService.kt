@@ -100,10 +100,15 @@ object ImportService {
     private data class ParsedBlock(val question: ParsedQuestion, val warnings: List<String>)
 
     private val sectionHeadingRegex = Regex(
-        "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)(?:\\s*(?:及|与|和)?\\s*解析)?(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])"
+        "^\\s*(?:(?:第[一二三四五六七八九十百0-9]+(?:部分|章|编))|(?:[一二三四五六七八九十]+\\s*[、.．]?))?\\s*" +
+            "(?:完整|详细|最终|官方|内部|完整版)?(选择题|单选题|单项选择题|多项选择题|多选题|不定项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)" +
+            "(?:\\s*(?:完整版|汇总|及解析|与解析|及评分标准|与评分标准|解析|评分标准))?" +
+            "(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])"
     )
     private val answerGroupHeadingRegex = Regex(
-        "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题)(?:\\s|$|[（(：:、.．])"
+        "^\\s*(?:(?:第[一二三四五六七八九十百0-9]+(?:部分|章|编))|(?:[一二三四五六七八九十]+\\s*[、.．]?))?\\s*" +
+            "(选择题|单选题|单项选择题|多项选择题|多选题|不定项选择题|判断题|填空题|简答题|问答题|论述题)" +
+            "(?:\\s|$|[（(：:、.．])"
     )
     private val judgmentAnswerRegex = Regex("[（(]\\s*(对|错|正确|错误|√|×|T|F|true|false)\\s*[）)]", RegexOption.IGNORE_CASE)
     private val answerKeyRangeRegex = Regex(
@@ -111,6 +116,10 @@ object ImportService {
     )
     private val answerKeyPairRegex = Regex(
         "(\\d{1,3})\\s*(?:[.、:：．,，]|[-—－]|\\s|[（(])\\s*([A-Da-dＡ-Ｄａ-ｄ]|对|错|正确|错误|√|×|T|F)\\s*[）)]?",
+        RegexOption.IGNORE_CASE
+    )
+    private val answerKeyMultiRegex = Regex(
+        "(\\d{1,3})\\s*[.、:：．]\\s*((?:[A-Da-dＡ-Ｄａ-ｄ](?:\\s*[、,，/／|；;\\s]+)?){2,})(?=[\\s、,，；;]|$|\\d)",
         RegexOption.IGNORE_CASE
     )
     private val answerKeyLineRegex = Regex("^\\s*(\\d{1,3})\\s*([.、:：．]|\\s)\\s*(.+)$", RegexOption.DOT_MATCHES_ALL)
@@ -135,19 +144,17 @@ object ImportService {
 
         for (section in sections) {
             when (section.kind) {
-                "choice", "judgment" -> {
+                "choice", "judgment", "multi" -> {
                     val lines = mutableListOf<String>()
                     section.lines.forEach { line ->
-                        if (section.kind == "choice" || section.kind == "judgment") {
-                            lines.addAll(splitEmbeddedQuestions(line))
-                        }
+                        lines.addAll(splitEmbeddedQuestions(line))
                     }
                     val blocks = buildBlocks(lines)
                     blocks.forEachIndexed { index, block ->
-                        val parsed = if (section.kind == "judgment") {
-                            parseJudgmentBlock(block, questions.size + 1)
-                        } else {
-                            parseBlock(block, questions.size + 1)
+                        val parsed = when (section.kind) {
+                            "judgment" -> parseJudgmentBlock(block, questions.size + 1)
+                            "multi" -> parseBlock(block, questions.size + 1, kind = "multi")
+                            else -> parseBlock(block, questions.size + 1)
                         }
                         questions.add(parsed.question)
                         warnings.addAll(parsed.warnings)
@@ -157,6 +164,14 @@ object ImportService {
                     val blocks = buildFillBlocks(section.lines)
                     blocks.forEach { block ->
                         questions.add(parseFillBlock(block, questions.size + 1))
+                    }
+                }
+                "short" -> {
+                    val blocks = buildBlocks(section.lines)
+                    blocks.forEach { block ->
+                        val parsed = parseShortBlock(block, questions.size + 1)
+                        questions.add(parsed.question)
+                        warnings.addAll(parsed.warnings)
                     }
                 }
                 "answers" -> {
@@ -190,11 +205,24 @@ object ImportService {
         }
 
         fun sectionKind(title: String): String = when (title) {
-            "选择题", "单项选择题", "多项选择题" -> "choice"
+            "选择题", "单选题", "单项选择题" -> "choice"
+            "多项选择题", "多选题", "不定项选择题" -> "multi"
             "判断题" -> "judgment"
             "填空题" -> "fill"
+            "简答题", "问答题", "论述题" -> "short"
             "参考答案", "答案速查", "标准答案", "正确答案", "答案" -> "answers"
             else -> "ignore"
+        }
+
+        // 分组标题里的「（1-80）」「（99、100）」只是题号范围，不是答案。
+        fun addAnswerPayload(raw: String) {
+            val rest = raw.trim().trimStart('：', ':', '、', '.', '．').trim()
+            if (rest.isEmpty()) return
+            val rangeOnly = Regex(
+                "^[（(]?\\s*\\d{1,3}\\s*(?:[-—~至、,，]\\s*\\d{1,3}\\s*)+[）)]?$"
+            )
+            if (rangeOnly.matches(rest)) return
+            current.lines.add(rest)
         }
 
         fun addAnswerContent(raw: String) {
@@ -203,8 +231,7 @@ object ImportService {
             val group = answerGroupHeadingRegex.find(t)
             if (group != null && qnumRegex.find(t) == null) {
                 current.lines.add(ANSWER_GROUP_PREFIX + sectionKind(group.groupValues[1]))
-                val rest = t.substring(group.range.last + 1).trim()
-                if (rest.isNotEmpty()) current.lines.add(rest)
+                addAnswerPayload(t.substring(group.range.last + 1))
             } else {
                 current.lines.add(t)
             }
@@ -219,8 +246,7 @@ object ImportService {
                 val group = answerGroupHeadingRegex.find(trimmed)
                 if (group != null && qnumRegex.find(trimmed) == null) {
                     current.lines.add(ANSWER_GROUP_PREFIX + sectionKind(group.groupValues[1]))
-                    val rest = trimmed.substring(group.range.last + 1).trim()
-                    if (rest.isNotEmpty()) current.lines.add(rest)
+                    addAnswerPayload(trimmed.substring(group.range.last + 1))
                     continue
                 }
                 val heading = sectionHeadingRegex.find(trimmed)
@@ -413,7 +439,11 @@ object ImportService {
         val global = mutableMapOf<String, String>()
         val byKind = mutableMapOf<String, MutableMap<String, String>>()
         groups.forEach { group ->
-            val parsed = buildAnswerMap(group.lines)
+            val parsed = if (group.kind == "short") {
+                buildShortAnswerMap(group.lines)
+            } else {
+                buildAnswerMap(group.lines)
+            }
             if (group.kind == null) {
                 parsed.forEach { (num, token) -> global.putIfAbsent(num, token) }
             } else if (group.kind != "ignore") {
@@ -448,6 +478,15 @@ object ImportService {
                 if (question.answer.isNullOrBlank()) {
                     questions[index] = question.copy(answer = token.trim())
                 }
+            } else if (question.kind == "short") {
+                if (question.answer.isNullOrBlank() && token.trim().isNotEmpty()) {
+                    questions[index] = question.copy(answer = token.trim())
+                }
+            } else if (question.kind == "multi") {
+                if (question.answer == null) {
+                    val mapped = token.trim().uppercase().filter { it in listOf('A', 'B', 'C', 'D') }
+                    if (mapped.isNotEmpty()) questions[index] = question.copy(answer = mapped)
+                }
             } else if (question.kind == "judgment") {
                 if (question.answer == null) {
                     val mapped = when (token.trim().lowercase()) {
@@ -464,6 +503,36 @@ object ImportService {
                 }
             }
         }
+    }
+
+    private fun buildShortAnswerMap(lines: List<String>): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        var number: String? = null
+        var text = StringBuilder()
+
+        fun flush() {
+            val n = number ?: return
+            val value = text.toString().trim()
+            if (value.isNotEmpty()) map.putIfAbsent(n, value)
+        }
+
+        lines.forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith(ANSWER_GROUP_PREFIX)) return@forEach
+            if (Regex("^[（(]?\\s*\\d{1,3}\\s*(?:[-—~至、,，]\\s*\\d{1,3}\\s*)+[）)]?$").matches(trimmed)) return@forEach
+            val entry = answerKeyLineRegex.matchEntire(trimmed)
+            if (entry != null) {
+                flush()
+                number = entry.groupValues[1]
+                text = StringBuilder(entry.groupValues[3].trim())
+            } else if (number != null) {
+                if (Regex("^[（(]?\\s*\\d{1,3}\\s*(?:[-—~至、,，]\\s*\\d{1,3}\\s*)+[）)]?$").matches(trimmed)) return@forEach
+                if (text.isNotEmpty()) text.append('\n')
+                text.append(trimmed)
+            }
+        }
+        flush()
+        return map
     }
 
     private fun buildAnswerMap(lines: List<String>): Map<String, String> {
@@ -495,6 +564,12 @@ object ImportService {
         }
 
         lines.forEach { line ->
+            answerKeyMultiRegex.findAll(line).forEach { match ->
+                map.putIfAbsent(
+                    match.groupValues[1],
+                    match.groupValues[2].uppercase().filter { it in listOf('A', 'B', 'C', 'D') }
+                )
+            }
             answerKeyPairRegex.findAll(line).forEach { match ->
                 map.putIfAbsent(match.groupValues[1], match.groupValues[2])
             }
@@ -548,6 +623,22 @@ object ImportService {
         return pieces.filter { it.isNotEmpty() }
     }
 
+    private fun parseShortBlock(block: List<String>, fallbackNumber: Int): ParsedBlock {
+        val first = block.first()
+        var number = fallbackNumber.toString()
+        val numMatch = qnumRegex.find(first)
+        if (numMatch != null) number = numMatch.groupValues[1]
+        val stem = block.joinToString(" ")
+            .replaceFirst(qnumRegex, "")
+            .replace(emptyParenRegex, "（　）")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return ParsedBlock(
+            ParsedQuestion(number, stem, emptyList(), null, "short"),
+            emptyList()
+        )
+    }
+
     private fun parseBlock(block: List<String>, fallbackNumber: Int, kind: String = "choice"): ParsedBlock {
         val first = block.first()
         val warningList = mutableListOf<String>()
@@ -558,7 +649,9 @@ object ImportService {
 
         val inlineLabel = optionLabelRegex.find(afterAnswer)
         val inlineStart = inlineLabel?.groups?.get(1)?.range?.first
-        val hasInlineOptions = inlineLabel != null && inlineStart != null
+        // 题干里的「A类客户」不是一个选项；一行里至少出现 A/B 两个标签才算内联选项。
+        val inlineLabels = optionLabelRegex.findAll(afterAnswer).count()
+        val hasInlineOptions = inlineLabel != null && inlineStart != null && inlineLabels >= 2
         val inlineKey = inlineLabel?.groupValues?.get(1)?.uppercase()
 
         var stemFirst = when {

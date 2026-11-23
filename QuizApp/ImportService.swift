@@ -95,11 +95,12 @@ enum ImportService {
     private static let qnumRegex = try! NSRegularExpression(pattern: "^\\s*(\\d+)\\s*[.、:：]?\\s*")
     private static let sectionBreakRegex = try! NSRegularExpression(pattern: "^\\s*[一二三四五六七八九十]+\\s*[、.．]?\\s*(填空题|判断题|简答题|问答题|论述题)")
     private static let rawParenRegex = try! NSRegularExpression(pattern: "[（(]\\s*([^）)]{1,8})\\s*[）)]")
-    private static let sectionHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)(?:\\s*(?:及|与|和)?\\s*解析)?(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])")
-    private static let answerGroupHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题)(?:\\s|$|[（(：:、.．])")
+    private static let sectionHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:(?:第[一二三四五六七八九十百0-9]+(?:部分|章|编))|(?:[一二三四五六七八九十]+\\s*[、.．]?))?\\s*(?:完整|详细|最终|官方|内部|完整版)?(选择题|单选题|单项选择题|多项选择题|多选题|不定项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)(?:\\s*(?:完整版|汇总|及解析|与解析|及评分标准|与评分标准|解析|评分标准))?(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])")
+    private static let answerGroupHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:(?:第[一二三四五六七八九十百0-9]+(?:部分|章|编))|(?:[一二三四五六七八九十]+\\s*[、.．]?))?\\s*(选择题|单选题|单项选择题|多项选择题|多选题|不定项选择题|判断题|填空题|简答题|问答题|论述题)(?:\\s|$|[（(：:、.．])")
     private static let judgmentAnswerRegex = try! NSRegularExpression(pattern: "[（(]\\s*(对|错|正确|错误|√|×|T|F|true|false)\\s*[）)]", options: [.caseInsensitive])
     private static let answerKeyRangeRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*[-—~至－]\\s*(\\d{1,3})\\s*[：:、.．]?\\s*([A-Da-dＡ-Ｄａ-ｄ][A-Da-dＡ-Ｄａ-ｄ、,，/／|；;\\s]*)")
     private static let answerKeyPairRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*(?:[.、:：．,，]|[-—－]|\\s|[（(])\\s*([A-Da-dＡ-Ｄａ-ｄ]|对|错|正确|错误|√|×|T|F)\\s*[）)]?", options: [.caseInsensitive])
+    private static let answerKeyMultiRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*[.、:：．]\\s*((?:[A-Da-dＡ-Ｄａ-ｄ](?:\\s*[、,，/／|；;\\s]+)?){2,})(?=[\\s、,，；;]|$|\\d)", options: [.caseInsensitive])
     private static let answerKeyLineRegex = try! NSRegularExpression(pattern: "^\\s*(\\d{1,3})\\s*([.、:：．]|\\s)\\s*(.+)$", options: [.dotMatchesLineSeparators])
     private static let fillParenRegex = try! NSRegularExpression(pattern: "[（(]\\s*([^）)]{1,80})\\s*[）)]")
     private static let embeddedAnswerKeyRegex = try! NSRegularExpression(pattern: "\\s\\d{1,3}[.、]")
@@ -141,16 +142,21 @@ enum ImportService {
 
         for section in sections {
             switch section.kind {
-            case "choice", "judgment":
+            case "choice", "judgment", "multi":
                 var lines: [String] = []
                 for line in section.lines {
                     lines.append(contentsOf: splitEmbeddedQuestions(line))
                 }
                 let blocks = buildBlocks(lines)
                 for block in blocks {
-                    let parsed = section.kind == "judgment"
-                        ? parseJudgmentBlock(block, fallbackNumber: questions.count + 1)
-                        : parseBlock(block, fallbackNumber: questions.count + 1)
+                    let parsed: ImportBlock
+                    if section.kind == "judgment" {
+                        parsed = parseJudgmentBlock(block, fallbackNumber: questions.count + 1)
+                    } else if section.kind == "multi" {
+                        parsed = parseBlock(block, fallbackNumber: questions.count + 1, kind: "multi")
+                    } else {
+                        parsed = parseBlock(block, fallbackNumber: questions.count + 1)
+                    }
                     questions.append(parsed.question)
                     warnings.append(contentsOf: parsed.warnings)
                 }
@@ -158,6 +164,13 @@ enum ImportService {
                 let blocks = buildFillBlocks(section.lines)
                 for block in blocks {
                     questions.append(parseFillBlock(block, fallbackNumber: questions.count + 1))
+                }
+            case "short":
+                let blocks = buildBlocks(section.lines)
+                for block in blocks {
+                    let parsed = parseShortBlock(block, fallbackNumber: questions.count + 1)
+                    questions.append(parsed.question)
+                    warnings.append(contentsOf: parsed.warnings)
                 }
             case "answers":
                 if answerLines == nil { answerLines = [] }
@@ -196,6 +209,14 @@ enum ImportService {
             return text
         }
 
+        func addAnswerPayload(_ raw: String) {
+            let rest = cleanAnswerLine(raw)
+            if rest.isEmpty { return }
+            let rangeOnly = "^[（(]?\\s*\\d{1,3}\\s*(?:[-—~至、,，]\\s*\\d{1,3}\\s*)+[）)]?$"
+            if rest.range(of: rangeOnly, options: .regularExpression) != nil { return }
+            current.lines.append(rest)
+        }
+
         func addAnswerContent(_ raw: String) {
             let text = cleanAnswerLine(raw)
             if text.isEmpty { return }
@@ -204,8 +225,7 @@ enum ImportService {
                let title = capture(group, group: 1, in: text) {
                 current.lines.append(answerGroupPrefix + kind(for: title))
                 let rest = (text as NSString).substring(from: group.range.location + group.range.length)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !rest.isEmpty { current.lines.append(rest) }
+                addAnswerPayload(rest)
             } else {
                 current.lines.append(text)
             }
@@ -221,9 +241,7 @@ enum ImportService {
                    qnumRegex.firstMatch(in: trimmed, range: fullRange(trimmed)) == nil,
                    let title = capture(group, group: 1, in: trimmed) {
                     current.lines.append(answerGroupPrefix + kind(for: title))
-                    let rest = (trimmed as NSString).substring(from: group.range.location + group.range.length)
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !rest.isEmpty { current.lines.append(rest) }
+                    addAnswerPayload((trimmed as NSString).substring(from: group.range.location + group.range.length))
                     continue
                 }
 
@@ -263,9 +281,11 @@ enum ImportService {
 
     private static func kind(for title: String) -> String {
         switch title {
-        case "选择题", "单项选择题", "多项选择题": return "choice"
+        case "选择题", "单选题", "单项选择题": return "choice"
+        case "多项选择题", "多选题", "不定项选择题": return "multi"
         case "判断题": return "judgment"
         case "填空题": return "fill"
+        case "简答题", "问答题", "论述题": return "short"
         case "参考答案", "答案速查", "标准答案", "正确答案", "答案": return "answers"
         default: return "ignore"
         }
@@ -454,7 +474,9 @@ enum ImportService {
         var global: [String: String] = [:]
         var byKind: [String: [String: String]] = [:]
         for group in groups {
-            let parsed = buildAnswerMap(group.lines)
+            let parsed = group.kind == "short"
+                ? buildShortAnswerMap(group.lines)
+                : buildAnswerMap(group.lines)
             if let kind = group.kind {
                 if kind == "ignore" { continue }
                 var target = byKind[kind] ?? [:]
@@ -508,6 +530,32 @@ enum ImportService {
                         kind: "fill"
                     )
                 }
+            } else if kind == "short" {
+                if (question.answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let text = token.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty {
+                        questions[index] = ParsedQuestion(
+                            num: question.num,
+                            stem: question.stem,
+                            options: question.options,
+                            answer: text,
+                            kind: "short"
+                        )
+                    }
+                }
+            } else if kind == "multi" {
+                if question.answer == nil {
+                    let mapped = token.uppercased().filter { "ABCD".contains($0) }
+                    if !mapped.isEmpty {
+                        questions[index] = ParsedQuestion(
+                            num: question.num,
+                            stem: question.stem,
+                            options: question.options,
+                            answer: String(mapped),
+                            kind: "multi"
+                        )
+                    }
+                }
             } else if kind == "judgment" {
                 if question.answer == nil {
                     let mapped: String?
@@ -541,6 +589,37 @@ enum ImportService {
         }
     }
 
+    private static func buildShortAnswerMap(_ lines: [String]) -> [String: String] {
+        var map: [String: String] = [:]
+        var number: String?
+        var text: [String] = []
+
+        func flush() {
+            guard let current = number else { return }
+            let value = text.joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty, map[current] == nil { map[current] = value }
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed.hasPrefix(answerGroupPrefix) { continue }
+            let rangeOnly = "^[（(]?\\s*\\d{1,3}\\s*(?:[-—~至、,，]\\s*\\d{1,3}\\s*)+[）)]?$"
+            if trimmed.range(of: rangeOnly, options: .regularExpression) != nil { continue }
+            if let entry = answerKeyLineRegex.firstMatch(in: trimmed, range: fullRange(trimmed)),
+               let num = capture(entry, group: 1, in: trimmed),
+               let rest = capture(entry, group: 3, in: trimmed) {
+                flush()
+                number = num
+                text = [rest.trimmingCharacters(in: .whitespacesAndNewlines)]
+            } else if number != nil {
+                text.append(trimmed)
+            }
+        }
+        flush()
+        return map
+    }
+
     private static func buildAnswerMap(_ lines: [String]) -> [String: String] {
         var map: [String: String] = [:]
         let joined = lines.joined(separator: "\n")
@@ -571,6 +650,14 @@ enum ImportService {
         }
 
         for line in lines {
+            for match in answerKeyMultiRegex.matches(in: line, range: fullRange(line)) {
+                if let num = capture(match, group: 1, in: line),
+                   let raw = capture(match, group: 2, in: line),
+                   map[num] == nil {
+                    let mapped = raw.uppercased().filter { "ABCD".contains($0) }
+                    if !mapped.isEmpty { map[num] = String(mapped) }
+                }
+            }
             for match in answerKeyPairRegex.matches(in: line, range: fullRange(line)) {
                 if let num = capture(match, group: 1, in: line),
                    let token = capture(match, group: 2, in: line),
@@ -640,7 +727,26 @@ enum ImportService {
         return pieces.filter { !$0.isEmpty }
     }
 
-    private static func parseBlock(_ block: [String], fallbackNumber: Int) -> ImportBlock {
+    private static func parseShortBlock(_ block: [String], fallbackNumber: Int) -> ImportBlock {
+        let first = block[0]
+        var number = "\(fallbackNumber)"
+        if let match = qnumRegex.firstMatch(in: first, range: fullRange(first)),
+           let value = capture(match, group: 1, in: first) {
+            number = value
+        }
+        var stem = block.joined(separator: " ")
+        stem = qnumRegex.stringByReplacingMatches(in: stem, range: fullRange(stem), withTemplate: "")
+        stem = emptyParenRegex.stringByReplacingMatches(in: stem, range: fullRange(stem), withTemplate: "（　）")
+        stem = stem.replacingOccurrences(of: "\t", with: " ")
+        while stem.contains("  ") { stem = stem.replacingOccurrences(of: "  ", with: " ") }
+        stem = stem.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ImportBlock(
+            question: ParsedQuestion(num: number, stem: stem, options: [], answer: nil, kind: "short"),
+            warnings: []
+        )
+    }
+
+    private static func parseBlock(_ block: [String], fallbackNumber: Int, kind: String = "choice") -> ImportBlock {
         let first = block[0]
         let nsFirst = first as NSString
         var warningList: [String] = []
@@ -649,10 +755,12 @@ enum ImportService {
             ?? answerTailRegex.firstMatch(in: first, range: fullRange(first))
         let answerEnd = answerMatch.map { $0.range.location + $0.range.length } ?? 0
         let afterAnswer = answerMatch == nil ? first : nsFirst.substring(from: answerEnd)
-        let inlineLabel = optionLabelRegex.firstMatch(in: afterAnswer, range: fullRange(afterAnswer))
+        let inlineMatches = optionLabelRegex.matches(in: afterAnswer, range: fullRange(afterAnswer))
+        let inlineLabel = inlineMatches.first
         let inlineStart = inlineLabel.map { $0.range(at: 1).location }
         let inlineKey = inlineLabel.flatMap { capture($0, group: 1, in: afterAnswer)?.uppercased() }
-        let hasInlineOptions = inlineStart != nil
+        // 题干里的「A类客户」不是一个选项；一行里至少出现 A/B 两个标签才算内联选项。
+        let hasInlineOptions = inlineStart != nil && inlineMatches.count >= 2
 
         var stemFirst: String
         if !hasInlineOptions {
@@ -744,7 +852,7 @@ enum ImportService {
 
         let cleanOptions = options.map { [$0.key, $0.value] }
         return ImportBlock(
-            question: ParsedQuestion(num: number, stem: stem, options: cleanOptions, answer: finalAnswer, kind: "choice"),
+            question: ParsedQuestion(num: number, stem: stem, options: cleanOptions, answer: finalAnswer, kind: kind),
             warnings: warningList
         )
     }

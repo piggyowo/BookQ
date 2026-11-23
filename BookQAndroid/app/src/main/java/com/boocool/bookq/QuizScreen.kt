@@ -110,6 +110,10 @@ fun QuizScreen(store: BookQStore, onFinished: () -> Unit) {
                 onChoose = { key ->
                     store.choose(key)
                     if (store.state.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                onSubmitMulti = {
+                    store.submitMulti()
+                    if (store.state.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
         }
@@ -258,7 +262,8 @@ private fun QuestionCard(
     answer: String?,
     mode: QuizMode,
     locked: Boolean,
-    onChoose: (String) -> Unit
+    onChoose: (String) -> Unit,
+    onSubmitMulti: () -> Unit
 ) {
     val shape = RoundedCornerShape(22.dp)
     Box(
@@ -297,7 +302,7 @@ private fun QuestionCard(
                 modifier = Modifier.padding(top = 18.dp, bottom = 24.dp)
             )
 
-            if (question.isFill) {
+            if (question.isFillLike) {
                 FillBlankBlock(question = question, revealed = answer != null, onReveal = { onChoose("FILL") })
             } else if (question.options.isEmpty()) {
                 NoOptionBlock(answered = answer != null, onConfirm = { onChoose("NA") })
@@ -312,6 +317,10 @@ private fun QuestionCard(
                             enabled = mode == QuizMode.EXAM || !locked,
                             onClick = { onChoose(key) }
                         )
+                    }
+                    if (question.isMulti && mode == QuizMode.PRACTICE && !locked) {
+                        Spacer(Modifier.height(5.dp))
+                        GhostPillButton("提交本题", modifier = Modifier.fillMaxWidth()) { onSubmitMulti() }
                     }
                 }
             }
@@ -356,7 +365,7 @@ private fun FillBlankBlock(
             .padding(horizontal = 18.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("填空题", style = sans(12, FontWeight.SemiBold).copy(color = Palette.Accent))
+        Text(if (question.isShort) "简答题" else "填空题", style = sans(12, FontWeight.SemiBold).copy(color = Palette.Accent))
         if (revealed) {
             Text("参考答案", style = sans(11).copy(color = Palette.Muted))
             Text(
@@ -452,6 +461,20 @@ private fun visualFor(
     mode: QuizMode,
     locked: Boolean
 ): OptionVisual {
+    val selected = answer.orEmpty()
+    if (question.isMulti) {
+        if (!question.hasAnswer) {
+            return if (selected.contains(key)) OptionVisual.NO_ANSWER else OptionVisual.NORMAL
+        }
+        if (mode == QuizMode.EXAM || !locked) {
+            return if (selected.contains(key)) OptionVisual.SELECTED else OptionVisual.NORMAL
+        }
+        return when {
+            key in question.answerKeys -> OptionVisual.CORRECT
+            selected.contains(key) -> OptionVisual.WRONG
+            else -> OptionVisual.DIM
+        }
+    }
     if (!question.hasAnswer) return if (answer == key) OptionVisual.NO_ANSWER else OptionVisual.NORMAL
     if (mode == QuizMode.EXAM) return if (answer == key) OptionVisual.SELECTED else OptionVisual.NORMAL
     if (!locked) return if (answer == key) OptionVisual.SELECTED else OptionVisual.NORMAL
@@ -462,11 +485,11 @@ private fun visualFor(
 
 @Composable
 private fun NoteBar(question: Question, answer: String?, mode: QuizMode, locked: Boolean) {
-    if (question.isFill) return
+    if (question.isFillLike) return
     if (mode == QuizMode.PRACTICE && locked) {
         val (color, content) = when {
             !question.hasAnswer -> Palette.Amber to "题库中无答案，本题不计分"
-            answer == question.answer -> Palette.Green to "回答正确，答案 ${question.answer ?: ""}"
+            question.isCorrect(answer) -> Palette.Green to "回答正确，答案 ${question.answer ?: ""}"
             else -> Palette.Red to "回答错误，正确答案是 ${question.answerDisplay}"
         }
         Row(
@@ -608,19 +631,19 @@ private fun SheetCell(store: BookQStore, session: QuizSession, position: Int, mo
     val current = position == session.index
 
     val fill = when {
-        question.isFill && answer != null -> Palette.AnsweredBg
-        question.isFill -> Palette.ChipBg
+        question.isFillLike && answer != null -> Palette.AnsweredBg
+        question.isFillLike -> Palette.ChipBg
         !question.hasAnswer && answer != null -> Palette.AmberBg
-        session.mode == QuizMode.PRACTICE && locked && answer == question.answer -> Palette.GreenBg
+        session.mode == QuizMode.PRACTICE && locked && question.isCorrect(answer) -> Palette.GreenBg
         session.mode == QuizMode.PRACTICE && locked -> Palette.RedBg
         answer != null -> Palette.AnsweredBg
         else -> Palette.ChipBg
     }
     val textColor = when {
-        question.isFill && answer != null -> Palette.Primary
-        question.isFill -> Palette.Ink2
+        question.isFillLike && answer != null -> Palette.Primary
+        question.isFillLike -> Palette.Ink2
         !question.hasAnswer && answer != null -> Palette.Amber
-        session.mode == QuizMode.PRACTICE && locked && answer == question.answer -> Palette.Green
+        session.mode == QuizMode.PRACTICE && locked && question.isCorrect(answer) -> Palette.Green
         session.mode == QuizMode.PRACTICE && locked -> Palette.Red
         answer != null -> Palette.Primary
         else -> Palette.Ink2

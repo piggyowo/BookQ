@@ -396,7 +396,7 @@ class BookQStore(private val context: Context) {
 
         if (s.mode == QuizMode.PRACTICE && s.locked[s.index]) return
 
-        if (question.isFill) {
+        if (question.isFillLike) {
             val answers = s.answers.toMutableList()
             val locked = s.locked.toMutableList()
             if (s.mode == QuizMode.PRACTICE) {
@@ -426,6 +426,19 @@ class BookQStore(private val context: Context) {
             return
         }
 
+        if (question.isMulti) {
+            val answers = s.answers.toMutableList()
+            val selected = answers[s.index].orEmpty()
+            val next = if (selected.contains(key)) {
+                selected.replace(key, "")
+            } else {
+                (selected + key).toCharArray().sorted().joinToString("")
+            }
+            answers[s.index] = next.ifEmpty { null }
+            session = s.copy(answers = answers)
+            return
+        }
+
         if (s.mode == QuizMode.EXAM) {
             val answers = s.answers.toMutableList()
             answers[s.index] = if (answers[s.index] == key) null else key
@@ -438,10 +451,28 @@ class BookQStore(private val context: Context) {
         session = s.copy(answers = answers, locked = locked)
 
         advanceCursorIfCurrent(question.id, s.scope)
+        recordGrade(question, key)
+    }
 
+    fun submitMulti() {
+        val s = session ?: return
+        if (screen != Screen.QUIZ || s.index !in s.queue.indices) return
+        if (s.mode != QuizMode.PRACTICE) return
+        if (s.locked[s.index]) return
+        val question = s.queue[s.index]
+        if (!question.isMulti) return
+        val selected = s.answers[s.index] ?: return
+        if (selected.isBlank()) return
+
+        val locked = s.locked.toMutableList().apply { this[s.index] = true }
+        session = s.copy(locked = locked)
+        advanceCursorIfCurrent(question.id, s.scope)
+        recordGrade(question, selected)
+    }
+
+    private fun recordGrade(question: Question, selected: String) {
         if (!question.hasAnswer) return
-
-        val isCorrect = key == question.answer
+        val isCorrect = question.isCorrect(selected)
         val old = state.progress[question.id] ?: QuestionProgress()
         val progress = old.copy(
             attempts = old.attempts + 1,
@@ -481,7 +512,7 @@ class BookQStore(private val context: Context) {
         }
 
     val noAnswerCount: Int
-        get() = session?.queue?.count { !it.isFill && !it.hasAnswer } ?: 0
+        get() = session?.queue?.count { !it.isFillLike && !it.hasAnswer } ?: 0
 
     fun finish() {
         val s = session ?: return
@@ -493,7 +524,7 @@ class BookQStore(private val context: Context) {
         if (s.mode == QuizMode.EXAM) {
             s.queue.forEachIndexed { index, question ->
                 if (!question.isGraded || s.answers[index] == null) return@forEachIndexed
-                val correct = s.answers[index] == question.answer
+                val correct = question.isCorrect(s.answers[index])
                 val old = progress[question.id] ?: QuestionProgress()
                 progress = progress + (question.id to old.copy(
                     attempts = old.attempts + 1,
@@ -511,6 +542,7 @@ class BookQStore(private val context: Context) {
         val items = s.queue.mapIndexedNotNull { index, question ->
             if (!question.isGraded) return@mapIndexedNotNull null
             if (s.mode == QuizMode.PRACTICE && s.answers[index] == null) return@mapIndexedNotNull null
+            if (question.isMulti && s.mode == QuizMode.PRACTICE && !s.locked[index]) return@mapIndexedNotNull null
             ResultItem(question, s.answers[index])
         }
 
@@ -524,7 +556,7 @@ class BookQStore(private val context: Context) {
         val unanswered = if (s.mode == QuizMode.EXAM) {
             s.queue.indices.count { i -> s.queue[i].isGraded && s.answers[i] == null }
         } else 0
-        val noAnswerCount = s.queue.count { !it.isFill && !it.hasAnswer }
+        val noAnswerCount = s.queue.count { !it.isFillLike && !it.hasAnswer }
         val fillCount = s.queue.count { it.isFill }
         val duration = (System.currentTimeMillis() - s.startTime) / 1000
 

@@ -27,20 +27,50 @@ data class Question(
     val keys: List<String> get() = options.mapNotNull { it.firstOrNull() }
 
     val isFill: Boolean get() = kind == "fill"
+    val isShort: Boolean get() = kind == "short"
+    val isMulti: Boolean get() = kind == "multi"
     val isJudgment: Boolean get() = kind == "judgment"
-    /** 填空题只展示答案，不参与对错、正确率和错题本。 */
-    val isGraded: Boolean get() = !isFill && hasAnswer
+    /** 填空/简答只展示答案，不参与对错、正确率和错题本。 */
+    val isFillLike: Boolean get() = isFill || isShort
+    val isGraded: Boolean get() = !isFillLike && hasAnswer
+
+    val answerKeys: Set<String>
+        get() = (answer ?: "").filter { it in 'A'..'D' }.map { it.toString() }.toSet()
 
     fun textFor(key: String): String =
         options.firstOrNull { it.firstOrNull() == key }?.getOrNull(1).orEmpty()
 
     val hasAnswer: Boolean
-        get() = if (isFill) !answer.isNullOrBlank() else answer != null && answer.isNotEmpty() && keys.contains(answer)
+        get() = when {
+            isFillLike -> !answer.isNullOrBlank()
+            isMulti -> answerKeys.isNotEmpty() && answerKeys.all { keys.contains(it) }
+            else -> answer != null && answer.isNotEmpty() && keys.contains(answer)
+        }
 
-    val answerText: String get() = if (isFill) answer.orEmpty() else answer?.let(::textFor).orEmpty()
+    fun isCorrect(choice: String?): Boolean {
+        if (choice == null) return false
+        if (isMulti) {
+            return choice.filter { it in 'A'..'D' }.map { it.toString() }.toSet() == answerKeys
+        }
+        return choice == answer
+    }
+
+    val answerText: String
+        get() = when {
+            isFillLike -> answer.orEmpty()
+            isMulti -> answerKeys.sorted().joinToString("、") { textFor(it) }
+            else -> answer?.let(::textFor).orEmpty()
+        }
 
     val answerDisplay: String
         get() {
+            if (isFillLike) return answerText
+            if (isMulti) {
+                return answerKeys.sorted().joinToString("、") { key ->
+                    val label = textFor(key).trim()
+                    if (label.isEmpty()) key else "$key. $label"
+                }
+            }
             val letter = answer ?: return answerText
             val label = answerText.trim()
             val alreadyPrefixed = listOf("$letter.", "$letter．", "$letter、", "$letter ")
@@ -50,8 +80,14 @@ data class Question(
 
     val metaLine: String
         get() {
-            if (isFill) return "题库第 $num 题 · 填空题 · 点击查看答案"
-            val typeText = if (isJudgment) "判断题" else "${options.size} 个选项"
+            if (isFillLike) {
+                return "题库第 $num 题 · ${if (isShort) "简答题" else "填空题"} · 点击查看答案"
+            }
+            val typeText = when {
+                isJudgment -> "判断题"
+                isMulti -> "多选题 · ${options.size} 个选项"
+                else -> "${options.size} 个选项"
+            }
             return "题库第 $num 题 · $typeText" + if (hasAnswer) "" else " · 题库无答案"
         }
 }
@@ -106,7 +142,7 @@ data class Attempt(
 }
 
 data class ResultItem(val question: Question, val choice: String?) {
-    val isCorrect: Boolean get() = choice != null && choice == question.answer
+    val isCorrect: Boolean get() = question.isCorrect(choice)
 }
 
 data class ChapterStat(val name: String, val correct: Int, val total: Int) {
@@ -154,9 +190,16 @@ data class ParsedBank(
     val questionCount: Int get() = questions.size
     val noAnswerCount: Int
         get() = questions.count { q ->
-            q.kind != "fill" && (q.answer == null || q.options.none { it.firstOrNull() == q.answer })
+            when {
+                q.kind == "fill" || q.kind == "short" -> false
+                q.answer == null -> true
+                q.kind == "multi" -> q.answer.any { ch -> q.options.none { it.firstOrNull() == ch.toString() } }
+                else -> q.options.none { it.firstOrNull() == q.answer }
+            }
         }
     val fillCount: Int get() = questions.count { it.kind == "fill" }
+    val shortCount: Int get() = questions.count { it.kind == "short" }
+    val multiCount: Int get() = questions.count { it.kind == "multi" }
     val judgmentCount: Int get() = questions.count { it.kind == "judgment" }
 }
 

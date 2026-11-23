@@ -463,6 +463,17 @@ final class QuizStore: ObservableObject {
 
         if mode == .practice && locked[index] { return }
 
+        if question.isFillLike {
+            if mode == .practice {
+                answers[index] = "FILL"
+                locked[index] = true
+                advanceCursorIfCurrent(question.id, scope: currentScope)
+            } else {
+                answers[index] = answers[index] == "FILL" ? nil : "FILL"
+            }
+            return
+        }
+
         if question.options.isEmpty {
             if mode == .practice {
                 answers[index] = "NA"
@@ -474,6 +485,18 @@ final class QuizStore: ObservableObject {
             return
         }
 
+        if question.isMulti {
+            let selected = answers[index] ?? ""
+            let next: String
+            if selected.contains(key) {
+                next = selected.replacingOccurrences(of: key, with: "")
+            } else {
+                next = String((selected + key).sorted())
+            }
+            answers[index] = next.isEmpty ? nil : next
+            return
+        }
+
         if mode == .exam {
             answers[index] = answers[index] == key ? nil : key
             return
@@ -482,11 +505,23 @@ final class QuizStore: ObservableObject {
         answers[index] = key
         locked[index] = true
         advanceCursorIfCurrent(question.id, scope: currentScope)
+        recordGrade(question, selected: key)
+    }
 
-        // 题库无答案：只提示，不计分、不进错题本、不加掌握度
+    func submitMulti() {
+        guard screen == .quiz, queue.indices.contains(index) else { return }
+        guard mode == .practice, !locked[index] else { return }
+        let question = queue[index]
+        guard question.isMulti, let selected = answers[index], !selected.isEmpty else { return }
+
+        locked[index] = true
+        advanceCursorIfCurrent(question.id, scope: currentScope)
+        recordGrade(question, selected: selected)
+    }
+
+    private func recordGrade(_ question: Question, selected: String) {
         guard question.hasAnswer else { return }
-
-        let correct = key == question.answer
+        let correct = question.isCorrect(selected)
         var item = progress[question.id] ?? QuestionProgress(attempts: 0, correct: 0)
         item.attempts += 1
         if correct {
@@ -531,7 +566,7 @@ final class QuizStore: ObservableObject {
     }
 
     var noAnswerCount: Int {
-        queue.filter { !$0.isFill && !$0.hasAnswer }.count
+        queue.filter { !$0.isFillLike && !$0.hasAnswer }.count
     }
 
     var fillCount: Int {
@@ -546,7 +581,7 @@ final class QuizStore: ObservableObject {
         if mode == .exam {
             for (position, question) in queue.enumerated() where question.isGraded {
                 guard let choice = answers[position] else { continue }
-                let correct = choice == question.answer
+                let correct = question.isCorrect(choice)
                 var item = progress[question.id] ?? QuestionProgress(attempts: 0, correct: 0)
                 item.attempts += 1
                 if correct {
@@ -569,6 +604,7 @@ final class QuizStore: ObservableObject {
         for (position, question) in queue.enumerated() where question.isGraded {
             if mode == .practice {
                 guard let choice = answers[position] else { continue }
+                if question.isMulti && !locked[position] { continue }
                 items.append(ResultItem(question: question, choice: choice))
             } else {
                 items.append(ResultItem(question: question, choice: answers[position]))
@@ -585,7 +621,7 @@ final class QuizStore: ObservableObject {
         let unanswered = mode == .exam
             ? zip(queue, answers).filter { $0.0.isGraded && $0.1 == nil }.count
             : 0
-        let noAnswerCount = queue.filter { !$0.isFill && !$0.hasAnswer }.count
+        let noAnswerCount = queue.filter { !$0.isFillLike && !$0.hasAnswer }.count
         let fillCount = queue.filter { $0.isFill }.count
         let duration = Date().timeIntervalSince(startTime)
 
