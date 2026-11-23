@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   ios:
@@ -51,6 +51,21 @@ jobs:
           name: BookQ-preview-ipa
           path: BookQ-preview.ipa
           if-no-files-found: error
+
+      - name: Publish IPA to preview branch
+        if: success()
+        run: |
+          mkdir -p /tmp/publish
+          cp BookQ-preview.ipa /tmp/publish/
+          git config user.name "BookQ Preview"
+          git config user.email "preview@local"
+          git checkout --orphan preview-artifacts
+          git rm -rf . || true
+          mkdir -p preview
+          cp /tmp/publish/BookQ-preview.ipa preview/BookQ-preview.ipa
+          git add preview/BookQ-preview.ipa
+          git commit -m "Preview IPA ${GITHUB_SHA}"
+          git push -f origin HEAD:preview-artifacts
 
       - name: Upload build log
         if: always()
