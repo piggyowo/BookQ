@@ -225,6 +225,9 @@ struct FabricGrid: View {
             context.stroke(path, with: .color(color), lineWidth: 0.5)
         }
         .allowsHitTesting(false)
+        // 这张网格在推页/拖回时会被整层移动。缓存成一张纹理，
+        // 避免每一帧都重新画上百条横竖线。
+        .drawingGroup()
     }
 }
 
