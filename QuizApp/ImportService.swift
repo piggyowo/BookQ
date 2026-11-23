@@ -2,6 +2,7 @@ import Foundation
 import ZIPFoundation
 
 enum ImportService {
+    private static let answerGroupPrefix = "\u{1}GROUP:"
     enum ImportError: LocalizedError {
         case unsupported(String)
         case unreadable(String)
@@ -94,11 +95,12 @@ enum ImportService {
     private static let qnumRegex = try! NSRegularExpression(pattern: "^\\s*(\\d+)\\s*[.、:：]?\\s*")
     private static let sectionBreakRegex = try! NSRegularExpression(pattern: "^\\s*[一二三四五六七八九十]+\\s*[、.．]?\\s*(填空题|判断题|简答题|问答题|论述题)")
     private static let rawParenRegex = try! NSRegularExpression(pattern: "[（(]\\s*([^）)]{1,8})\\s*[）)]")
-    private static let sectionHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|答案)(?:\\s|$|[（(：:])")
+    private static let sectionHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)(?:\\s*(?:及|与|和)?\\s*解析)?(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])")
+    private static let answerGroupHeadingRegex = try! NSRegularExpression(pattern: "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题)(?:\\s|$|[（(：:、.．])")
     private static let judgmentAnswerRegex = try! NSRegularExpression(pattern: "[（(]\\s*(对|错|正确|错误|√|×|T|F|true|false)\\s*[）)]", options: [.caseInsensitive])
-    private static let answerKeyRangeRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*[-—~至]\\s*(\\d{1,3})\\s*[：:、.．]?\\s*([A-Da-d]{2,})")
-    private static let answerKeyPairRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*[.、:：]\\s*([A-Da-d]|对|错|正确|错误|√|×|T|F)", options: [.caseInsensitive])
-    private static let answerKeyLineRegex = try! NSRegularExpression(pattern: "^\\s*(\\d{1,3})\\s*[.、:：]\\s*(.+)$", options: [.dotMatchesLineSeparators])
+    private static let answerKeyRangeRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*[-—~至－]\\s*(\\d{1,3})\\s*[：:、.．]?\\s*([A-Da-dＡ-Ｄａ-ｄ][A-Da-dＡ-Ｄａ-ｄ、,，/／|；;\\s]*)")
+    private static let answerKeyPairRegex = try! NSRegularExpression(pattern: "(\\d{1,3})\\s*(?:[.、:：．,，]|[-—－]|\\s|[（(])\\s*([A-Da-dＡ-Ｄａ-ｄ]|对|错|正确|错误|√|×|T|F)\\s*[）)]?", options: [.caseInsensitive])
+    private static let answerKeyLineRegex = try! NSRegularExpression(pattern: "^\\s*(\\d{1,3})\\s*([.、:：．]|\\s)\\s*(.+)$", options: [.dotMatchesLineSeparators])
     private static let fillParenRegex = try! NSRegularExpression(pattern: "[（(]\\s*([^）)]{1,80})\\s*[）)]")
     private static let embeddedAnswerKeyRegex = try! NSRegularExpression(pattern: "\\s\\d{1,3}[.、]")
 
@@ -185,16 +187,73 @@ enum ImportService {
             if !current.lines.isEmpty { sections.append(current) }
         }
 
+        func cleanAnswerLine(_ raw: String) -> String {
+            var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            while let first = text.first, "：:、.．".contains(first) {
+                text.removeFirst()
+                text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return text
+        }
+
+        func addAnswerContent(_ raw: String) {
+            let text = cleanAnswerLine(raw)
+            if text.isEmpty { return }
+            if let group = answerGroupHeadingRegex.firstMatch(in: text, range: fullRange(text)),
+               qnumRegex.firstMatch(in: text, range: fullRange(text)) == nil,
+               let title = capture(group, group: 1, in: text) {
+                current.lines.append(answerGroupPrefix + kind(for: title))
+                let rest = (text as NSString).substring(from: group.range.location + group.range.length)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !rest.isEmpty { current.lines.append(rest) }
+            } else {
+                current.lines.append(text)
+            }
+        }
+
         for line in lines {
-            if let heading = sectionHeadingRegex.firstMatch(in: line, range: fullRange(line)),
-               qnumRegex.firstMatch(in: line, range: fullRange(line)) == nil {
-                flush()
-                hasHeading = true
-                let title = capture(heading, group: 1, in: line) ?? ""
-                current = RawSection(kind: kind(for: title), lines: [])
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // 已经在文末答案区：一、选择题 / 二、填空题 只是答案分组标题，
+            // 不能当成新的题目章节把后面的答案吞掉。
+            if current.kind == "answers" {
+                if let group = answerGroupHeadingRegex.firstMatch(in: trimmed, range: fullRange(trimmed)),
+                   qnumRegex.firstMatch(in: trimmed, range: fullRange(trimmed)) == nil,
+                   let title = capture(group, group: 1, in: trimmed) {
+                    current.lines.append(answerGroupPrefix + kind(for: title))
+                    let rest = (trimmed as NSString).substring(from: group.range.location + group.range.length)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !rest.isEmpty { current.lines.append(rest) }
+                    continue
+                }
+
+                if let heading = sectionHeadingRegex.firstMatch(in: trimmed, range: fullRange(trimmed)),
+                   qnumRegex.firstMatch(in: trimmed, range: fullRange(trimmed)) == nil {
+                    let title = capture(heading, group: 1, in: trimmed) ?? ""
+                    if kind(for: title) == "answers" {
+                        let ns = trimmed as NSString
+                        addAnswerContent(ns.substring(from: heading.range.location + heading.range.length))
+                    }
+                    continue
+                }
+
+                current.lines.append(trimmed)
                 continue
             }
-            current.lines.append(line)
+
+            if let heading = sectionHeadingRegex.firstMatch(in: trimmed, range: fullRange(trimmed)),
+               qnumRegex.firstMatch(in: trimmed, range: fullRange(trimmed)) == nil {
+                flush()
+                hasHeading = true
+                let title = capture(heading, group: 1, in: trimmed) ?? ""
+                current = RawSection(kind: kind(for: title), lines: [])
+                if kind(for: title) == "answers" {
+                    let ns = trimmed as NSString
+                    addAnswerContent(ns.substring(from: heading.range.location + heading.range.length))
+                }
+                continue
+            }
+            current.lines.append(trimmed)
         }
         flush()
 
@@ -207,7 +266,7 @@ enum ImportService {
         case "选择题", "单项选择题", "多项选择题": return "choice"
         case "判断题": return "judgment"
         case "填空题": return "fill"
-        case "参考答案", "答案速查", "答案": return "answers"
+        case "参考答案", "答案速查", "标准答案", "正确答案", "答案": return "answers"
         default: return "ignore"
         }
     }
@@ -363,78 +422,188 @@ enum ImportService {
         )
     }
 
+    private final class AnswerKeyGroup {
+        let kind: String?
+        var lines: [String]
+
+        init(kind: String?, lines: [String]) {
+            self.kind = kind
+            self.lines = lines
+        }
+    }
+
     private static func applyAnswerKey(_ questions: inout [ParsedQuestion], lines: [String]) {
-        var map: [String: String] = [:]
-        let joined = lines.joined(separator: "\n")
-        for match in answerKeyRangeRegex.matches(in: joined, range: fullRange(joined)) {
-            guard let startText = capture(match, group: 1, in: joined),
-                  let endText = capture(match, group: 2, in: joined),
-                  let start = Int(startText), let end = Int(endText),
-                  let letters = capture(match, group: 3, in: joined)?.uppercased(),
-                  end - start + 1 == letters.count else { continue }
-            for (offset, char) in letters.enumerated() {
-                map["\(start + offset)"] = String(char)
+        var groups: [AnswerKeyGroup] = []
+        var currentGroup: AnswerKeyGroup?
+
+        for line in lines {
+            if line.hasPrefix(answerGroupPrefix) {
+                if let currentGroup { groups.append(currentGroup) }
+                let rawKind = String(line.dropFirst(answerGroupPrefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                currentGroup = AnswerKeyGroup(kind: rawKind.isEmpty ? nil : rawKind, lines: [])
+            } else {
+                if currentGroup == nil {
+                    currentGroup = AnswerKeyGroup(kind: nil, lines: [])
+                }
+                currentGroup?.lines.append(line)
             }
         }
-        for line in lines {
-            for match in answerKeyPairRegex.matches(in: line, range: fullRange(line)) {
-                if let num = capture(match, group: 1, in: line),
-                   let token = capture(match, group: 2, in: line) {
-                    map[num] = token
+        if let currentGroup { groups.append(currentGroup) }
+
+        var global: [String: String] = [:]
+        var byKind: [String: [String: String]] = [:]
+        for group in groups {
+            let parsed = buildAnswerMap(group.lines)
+            if let kind = group.kind {
+                if kind == "ignore" { continue }
+                var target = byKind[kind] ?? [:]
+                for (num, token) in parsed where target[num] == nil {
+                    target[num] = token
                 }
-            }
-            if let match = answerKeyLineRegex.firstMatch(in: line, range: fullRange(line)),
-               let num = capture(match, group: 1, in: line),
-               let rest = capture(match, group: 2, in: line)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !rest.isEmpty,
-               embeddedAnswerKeyRegex.firstMatch(in: rest, range: fullRange(rest)) == nil {
-                if map[num] == nil { map[num] = rest }
+                byKind[kind] = target
+            } else {
+                for (num, token) in parsed where global[num] == nil {
+                    global[num] = token
+                }
             }
         }
 
+        var ordinals: [String: Int] = [:]
         for index in questions.indices {
-            guard let token = map[questions[index].num] else { continue }
-            if questions[index].kind == "fill" {
-                if (questions[index].answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let question = questions[index]
+            let kind = question.kind
+            let ordinal = (ordinals[kind] ?? 0) + 1
+            ordinals[kind] = ordinal
+
+            let groupMap = byKind[kind]
+            let fromGroup = groupMap?[question.num] ?? groupMap?["\(ordinal)"]
+            let directGlobal = global[question.num]
+            let sequentialGlobal = global["\(index + 1)"]
+
+            var token: String? = fromGroup
+            if token == nil {
+                if kind == "fill" {
+                    // 没有明确「填空题」答案分组时，文末的 A/B/C/D 更可能是选择题答案，
+                    // 不要把它们误填进填空题。
+                    if let direct = directGlobal, direct.count > 1 {
+                        token = direct
+                    } else if let sequential = sequentialGlobal, sequential.count > 1 {
+                        token = sequential
+                    }
+                } else {
+                    token = directGlobal ?? sequentialGlobal
+                }
+            }
+            guard let token else { continue }
+
+            if kind == "fill" {
+                if fromGroup == nil && token.count <= 1 { continue }
+                if (question.answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     questions[index] = ParsedQuestion(
-                        num: questions[index].num,
-                        stem: questions[index].stem,
-                        options: questions[index].options,
+                        num: question.num,
+                        stem: question.stem,
+                        options: question.options,
                         answer: token.trimmingCharacters(in: .whitespacesAndNewlines),
                         kind: "fill"
                     )
                 }
-            } else if questions[index].kind == "judgment" {
-                if questions[index].answer == nil {
+            } else if kind == "judgment" {
+                if question.answer == nil {
                     let mapped: String?
-                    switch token.lowercased() {
+                    switch token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
                     case "a", "对", "正确", "√", "t", "true": mapped = "A"
                     case "b", "错", "错误", "×", "f", "false": mapped = "B"
                     default: mapped = nil
                     }
                     if let mapped {
                         questions[index] = ParsedQuestion(
-                            num: questions[index].num,
-                            stem: questions[index].stem,
-                            options: questions[index].options,
+                            num: question.num,
+                            stem: question.stem,
+                            options: question.options,
                             answer: mapped,
                             kind: "judgment"
                         )
                     }
                 }
-            } else if questions[index].answer == nil {
+            } else if question.answer == nil {
                 let mapped = token.first.map { String($0).uppercased() }
                 if let mapped, ["A", "B", "C", "D"].contains(mapped) {
                     questions[index] = ParsedQuestion(
-                        num: questions[index].num,
-                        stem: questions[index].stem,
-                        options: questions[index].options,
+                        num: question.num,
+                        stem: question.stem,
+                        options: question.options,
                         answer: mapped,
                         kind: "choice"
                     )
                 }
             }
         }
+    }
+
+    private static func buildAnswerMap(_ lines: [String]) -> [String: String] {
+        var map: [String: String] = [:]
+        let joined = lines.joined(separator: "\n")
+
+        for match in answerKeyRangeRegex.matches(in: joined, range: fullRange(joined)) {
+            guard let startText = capture(match, group: 1, in: joined),
+                  let endText = capture(match, group: 2, in: joined),
+                  let start = Int(startText), let end = Int(endText),
+                  let rawLetters = capture(match, group: 3, in: joined) else { continue }
+            let letters = rawLetters.compactMap { normalizeAnswerLetter($0) }
+            guard end - start + 1 == letters.count else { continue }
+            for (offset, char) in letters.enumerated() where map["\(start + offset)"] == nil {
+                map["\(start + offset)"] = String(char)
+            }
+        }
+
+        // 有些 Word 表格会把题号和答案拆成上下两行：1 / A / 2 / B。
+        for index in lines.indices {
+            let number = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard number.range(of: "^\\d{1,3}$", options: .regularExpression) != nil,
+                  index + 1 < lines.count else { continue }
+            let next = lines[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !next.isEmpty,
+                  next.range(of: "^\\d{1,3}$", options: .regularExpression) == nil,
+                  next.count <= 80,
+                  map[number] == nil else { continue }
+            map[number] = next
+        }
+
+        for line in lines {
+            for match in answerKeyPairRegex.matches(in: line, range: fullRange(line)) {
+                if let num = capture(match, group: 1, in: line),
+                   let token = capture(match, group: 2, in: line),
+                   map[num] == nil {
+                    map[num] = token
+                }
+            }
+            if let match = answerKeyLineRegex.firstMatch(in: line, range: fullRange(line)),
+               let num = capture(match, group: 1, in: line),
+               let rest = capture(match, group: 3, in: line)?
+                   .trimmingCharacters(in: .whitespacesAndNewlines),
+               !rest.isEmpty,
+               embeddedAnswerKeyRegex.firstMatch(in: rest, range: fullRange(rest)) == nil,
+               map[num] == nil {
+                map[num] = rest
+            }
+        }
+        return map
+    }
+
+    private static func normalizeAnswerLetter(_ ch: Character) -> Character? {
+        var value = ch
+        if ch.unicodeScalars.count == 1, let scalar = ch.unicodeScalars.first {
+            let code = scalar.value
+            if code >= 0xFF21 && code <= 0xFF24 || code >= 0xFF41 && code <= 0xFF44 {
+                if let converted = UnicodeScalar(code - 0xFEE0) {
+                    value = Character(String(converted))
+                }
+            }
+        }
+        let upper = String(value).uppercased()
+        guard let first = upper.first, "ABCD".contains(first) else { return nil }
+        return first
     }
 
     private static func startsWithOptionLabel(_ line: String) -> Bool {

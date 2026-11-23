@@ -14,6 +14,7 @@ import java.util.zip.ZipInputStream
 class ImportException(message: String) : Exception(message)
 
 object ImportService {
+    private const val ANSWER_GROUP_PREFIX = "\u0001GROUP:"
 
     fun parse(file: File, displayName: String = file.name): ParsedBank {
         val ext = file.extension.lowercase()
@@ -99,11 +100,20 @@ object ImportService {
     private data class ParsedBlock(val question: ParsedQuestion, val warnings: List<String>)
 
     private val sectionHeadingRegex = Regex(
-        "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|答案)(?:\\s|$|[（(：:])"
+        "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题|参考答案|答案速查|标准答案|正确答案|答案)(?:\\s*(?:及|与|和)?\\s*解析)?(?:\\s*[（(][^）)]*[）)])?(?:\\s|$|[：:、.．])"
+    )
+    private val answerGroupHeadingRegex = Regex(
+        "^\\s*(?:[一二三四五六七八九十]+\\s*[、.．]?\\s*)?(选择题|单项选择题|多项选择题|判断题|填空题|简答题|问答题|论述题)(?:\\s|$|[（(：:、.．])"
     )
     private val judgmentAnswerRegex = Regex("[（(]\\s*(对|错|正确|错误|√|×|T|F|true|false)\\s*[）)]", RegexOption.IGNORE_CASE)
-    private val answerKeyRangeRegex = Regex("(\\d{1,3})\\s*[-—~至]\\s*(\\d{1,3})\\s*[：:、.．]?\\s*([A-Da-d]{2,})")
-    private val answerKeyPairRegex = Regex("(\\d{1,3})\\s*[.、:：]\\s*([A-Da-d]|对|错|正确|错误|√|×|T|F)", RegexOption.IGNORE_CASE)
+    private val answerKeyRangeRegex = Regex(
+        "(\\d{1,3})\\s*[-—~至－]\\s*(\\d{1,3})\\s*[：:、.．]?\\s*([A-Da-dＡ-Ｄａ-ｄ][A-Da-dＡ-Ｄａ-ｄ、,，/／|；;\\s]*)"
+    )
+    private val answerKeyPairRegex = Regex(
+        "(\\d{1,3})\\s*(?:[.、:：．,，]|[-—－]|\\s|[（(])\\s*([A-Da-dＡ-Ｄａ-ｄ]|对|错|正确|错误|√|×|T|F)\\s*[）)]?",
+        RegexOption.IGNORE_CASE
+    )
+    private val answerKeyLineRegex = Regex("^\\s*(\\d{1,3})\\s*([.、:：．]|\\s)\\s*(.+)$", RegexOption.DOT_MATCHES_ALL)
 
     private data class RawSection(val kind: String, val lines: MutableList<String>)
     private data class FillAnswer(val text: String, val stem: String)
@@ -179,22 +189,63 @@ object ImportService {
             if (current.lines.isNotEmpty()) sections.add(current)
         }
 
+        fun sectionKind(title: String): String = when (title) {
+            "选择题", "单项选择题", "多项选择题" -> "choice"
+            "判断题" -> "judgment"
+            "填空题" -> "fill"
+            "参考答案", "答案速查", "标准答案", "正确答案", "答案" -> "answers"
+            else -> "ignore"
+        }
+
+        fun addAnswerContent(raw: String) {
+            val t = raw.trim().trimStart('：', ':', '、', '.', '．').trim()
+            if (t.isEmpty()) return
+            val group = answerGroupHeadingRegex.find(t)
+            if (group != null && qnumRegex.find(t) == null) {
+                current.lines.add(ANSWER_GROUP_PREFIX + sectionKind(group.groupValues[1]))
+                val rest = t.substring(group.range.last + 1).trim()
+                if (rest.isNotEmpty()) current.lines.add(rest)
+            } else {
+                current.lines.add(t)
+            }
+        }
+
         for (line in lines) {
-            val heading = sectionHeadingRegex.find(line)
-            if (heading != null && qnumRegex.find(line) == null) {
-                flush()
-                hasHeading = true
-                val kind = when (heading.groupValues[1]) {
-                    "选择题", "单项选择题", "多项选择题" -> "choice"
-                    "判断题" -> "judgment"
-                    "填空题" -> "fill"
-                    "参考答案", "答案速查", "答案" -> "answers"
-                    else -> "ignore"
+            val trimmed = line.trim()
+
+            // 已经在文末答案区：一、选择题 / 二、填空题 只是答案分组标题，
+            // 不能当成新的题目章节把后面的答案吞掉。
+            if (current.kind == "answers") {
+                val group = answerGroupHeadingRegex.find(trimmed)
+                if (group != null && qnumRegex.find(trimmed) == null) {
+                    current.lines.add(ANSWER_GROUP_PREFIX + sectionKind(group.groupValues[1]))
+                    val rest = trimmed.substring(group.range.last + 1).trim()
+                    if (rest.isNotEmpty()) current.lines.add(rest)
+                    continue
                 }
-                current = RawSection(kind, mutableListOf())
+                val heading = sectionHeadingRegex.find(trimmed)
+                if (heading != null && qnumRegex.find(trimmed) == null) {
+                    if (sectionKind(heading.groupValues[1]) == "answers") {
+                        addAnswerContent(trimmed.substring(heading.range.last + 1))
+                    }
+                    continue
+                }
+                current.lines.add(trimmed)
                 continue
             }
-            current.lines.add(line)
+
+            val heading = sectionHeadingRegex.find(trimmed)
+            if (heading != null && qnumRegex.find(trimmed) == null) {
+                flush()
+                hasHeading = true
+                val kind = sectionKind(heading.groupValues[1])
+                current = RawSection(kind, mutableListOf())
+                if (kind == "answers") {
+                    addAnswerContent(trimmed.substring(heading.range.last + 1))
+                }
+                continue
+            }
+            current.lines.add(trimmed)
         }
         flush()
 
@@ -339,39 +390,67 @@ object ImportService {
         )
     }
 
+    private data class AnswerKeyGroup(val kind: String?, val lines: MutableList<String>)
+
     private fun applyAnswerKey(questions: MutableList<ParsedQuestion>, lines: List<String>) {
-        val map = mutableMapOf<String, String>()
-        val joined = lines.joinToString("\n")
-        answerKeyRangeRegex.findAll(joined).forEach { match ->
-            val start = match.groupValues[1].toIntOrNull() ?: return@forEach
-            val end = match.groupValues[2].toIntOrNull() ?: return@forEach
-            val letters = match.groupValues[3].uppercase()
-            if (end - start + 1 == letters.length) {
-                letters.forEachIndexed { offset, ch -> map[(start + offset).toString()] = ch.toString() }
+        val groups = mutableListOf<AnswerKeyGroup>()
+        var currentGroup: AnswerKeyGroup? = null
+
+        lines.forEach { line ->
+            if (line.startsWith(ANSWER_GROUP_PREFIX)) {
+                currentGroup?.let { groups.add(it) }
+                currentGroup = AnswerKeyGroup(
+                    line.removePrefix(ANSWER_GROUP_PREFIX).trim(),
+                    mutableListOf()
+                )
+            } else {
+                if (currentGroup == null) currentGroup = AnswerKeyGroup(null, mutableListOf())
+                currentGroup!!.lines.add(line)
             }
         }
-        lines.forEach { line ->
-            answerKeyPairRegex.findAll(line).forEach { match ->
-                map.putIfAbsent(match.groupValues[1], match.groupValues[2])
-            }
-            val full = Regex("^\\s*(\\d{1,3})\\s*[.、:：]\\s*(.+)$").matchEntire(line)
-            if (full != null) {
-                val rest = full.groupValues[2].trim()
-                if (rest.isNotEmpty() && !Regex("\\s\\d{1,3}[.、]").containsMatchIn(rest)) {
-                    map.putIfAbsent(full.groupValues[1], rest)
-                }
+        currentGroup?.let { groups.add(it) }
+
+        val global = mutableMapOf<String, String>()
+        val byKind = mutableMapOf<String, MutableMap<String, String>>()
+        groups.forEach { group ->
+            val parsed = buildAnswerMap(group.lines)
+            if (group.kind == null) {
+                parsed.forEach { (num, token) -> global.putIfAbsent(num, token) }
+            } else if (group.kind != "ignore") {
+                val target = byKind.getOrPut(group.kind) { mutableMapOf() }
+                parsed.forEach { (num, token) -> target.putIfAbsent(num, token) }
             }
         }
 
+        val ordinals = mutableMapOf<String, Int>()
         questions.forEachIndexed { index, question ->
-            val token = map[question.num] ?: return@forEachIndexed
+            val ordinal = (ordinals[question.kind] ?: 0) + 1
+            ordinals[question.kind] = ordinal
+
+            val groupMap = byKind[question.kind]
+            val fromGroup = groupMap?.get(question.num) ?: groupMap?.get(ordinal.toString())
+            // 没有分组标题时，先按题号匹配；题号对不上再按整卷顺序。
+            // 这样选择题 1-127 + 填空题 1-20 的文末连续答案也能对上。
+            val directGlobal = global[question.num]
+            val sequentialGlobal = global[(index + 1).toString()]
+            val token = fromGroup ?: if (question.kind == "fill") {
+                directGlobal?.takeIf { it.trim().length > 1 }
+                    ?: sequentialGlobal?.takeIf { it.trim().length > 1 }
+            } else {
+                directGlobal ?: sequentialGlobal
+            }
+            if (token == null) return@forEachIndexed
+
             if (question.kind == "fill") {
+                // 没有明确「填空题」答案分组时，文末的 A/B/C/D 更可能是选择题答案，
+                // 不要把它们误填进填空题。
+                if (fromGroup == null && token.trim().length <= 1) return@forEachIndexed
                 if (question.answer.isNullOrBlank()) {
                     questions[index] = question.copy(answer = token.trim())
                 }
             } else if (question.kind == "judgment") {
                 if (question.answer == null) {
-                    val mapped = when (token.lowercase()) {
+                    val mapped = when (token.trim().lowercase()) {
                         "a", "对", "正确", "√", "t", "true" -> "A"
                         "b", "错", "错误", "×", "f", "false" -> "B"
                         else -> null
@@ -379,12 +458,64 @@ object ImportService {
                     if (mapped != null) questions[index] = question.copy(answer = mapped)
                 }
             } else if (question.answer == null) {
-                val mapped = token.firstOrNull()?.uppercase()?.toString()
+                val mapped = token.trim().firstOrNull()?.uppercase()?.toString()
                 if (mapped != null && mapped in listOf("A", "B", "C", "D")) {
                     questions[index] = question.copy(answer = mapped)
                 }
             }
         }
+    }
+
+    private fun buildAnswerMap(lines: List<String>): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        val joined = lines.joinToString("\n")
+
+        answerKeyRangeRegex.findAll(joined).forEach { match ->
+            val start = match.groupValues[1].toIntOrNull() ?: return@forEach
+            val end = match.groupValues[2].toIntOrNull() ?: return@forEach
+            val letters = match.groupValues[3].mapNotNull { normalizeAnswerLetter(it) }
+            if (end - start + 1 == letters.size) {
+                letters.forEachIndexed { offset, ch ->
+                    map.putIfAbsent((start + offset).toString(), ch.toString())
+                }
+            }
+        }
+
+        // 有些 Word 表格会把题号和答案拆成上下两行：1 / A / 2 / B。
+        lines.forEachIndexed { index, line ->
+            val number = Regex("^\\s*(\\d{1,3})\\s*$").matchEntire(line)
+                ?.groupValues?.get(1) ?: return@forEachIndexed
+            val next = lines.getOrNull(index + 1)?.trim().orEmpty()
+            if (next.isNotEmpty() &&
+                !Regex("^\\d{1,3}$").matches(next) &&
+                next.length <= 80
+            ) {
+                map.putIfAbsent(number, next)
+            }
+        }
+
+        lines.forEach { line ->
+            answerKeyPairRegex.findAll(line).forEach { match ->
+                map.putIfAbsent(match.groupValues[1], match.groupValues[2])
+            }
+            val full = answerKeyLineRegex.matchEntire(line)
+            if (full != null) {
+                val rest = full.groupValues[3].trim()
+                if (rest.isNotEmpty() && !Regex("\\s\\d{1,3}[.、:：]").containsMatchIn(rest)) {
+                    map.putIfAbsent(full.groupValues[1], rest)
+                }
+            }
+        }
+        return map
+    }
+
+    private fun normalizeAnswerLetter(ch: Char): Char? {
+        val c = when (ch) {
+            in 'Ａ'..'Ｄ', in 'ａ'..'ｄ' -> (ch.code - 0xFEE0).toChar()
+            else -> ch
+        }
+        val upper = c.uppercaseChar()
+        return if (upper in 'A'..'D') upper else null
     }
 
     private fun startsWithOptionLabel(line: String): Boolean {

@@ -109,4 +109,95 @@ class ImportParsingTest {
         assertEquals("第一空答案", p.questions[1].answer)
         assertEquals("第二空答案", p.questions[2].answer)
     }
+
+    @Test
+    fun parsesAnswerHeadingOnSameLine() {
+        val text = """
+            1.第一题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            2.第二题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            参考答案及解析：1.A 2.B
+        """.trimIndent()
+        val p = parseText(text)
+        assertEquals(2, p.questions.size)
+        assertEquals("A", p.questions[0].answer)
+        assertEquals("B", p.questions[1].answer)
+    }
+
+    @Test
+    fun keepsAnswerGroupsSeparatedWhenNumbersRestart() {
+        val text = """
+            一、选择题
+            1.选择一
+            A、选项一 B、选项二 C、选项三 D、选项四
+            2.选择二
+            A、选项一 B、选项二 C、选项三 D、选项四
+            二、填空题
+            1.填空一（　）
+            2.填空二（　）
+            参考答案
+            一、选择题
+            1-2 AB
+            二、填空题
+            1、填空答案一
+            2、填空答案二
+        """.trimIndent()
+        val p = parseText(text)
+        assertEquals(4, p.questions.size)
+        assertEquals("A", p.questions[0].answer)
+        assertEquals("B", p.questions[1].answer)
+        assertEquals("填空答案一", p.questions[2].answer)
+        assertEquals("填空答案二", p.questions[3].answer)
+    }
+
+    @Test
+    fun parsesSeparatedRangeAnswerKey() {
+        val text = """
+            1.第一题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            2.第二题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            3.第三题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            4.第四题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            5.第五题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            参考答案
+            1-5：A、B、C、D、A
+        """.trimIndent()
+        val p = parseText(text)
+        assertEquals(5, p.questions.size)
+        assertEquals(listOf("A", "B", "C", "D", "A"), p.questions.map { it.answer })
+    }
+
+    @Test
+    fun parsesGroupHeadingAndAnswersOnSameLine() {
+        val text = """
+            1.第一题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            2.第二题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            3.第三题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            参考答案 一、选择题 1-3 A、B、C
+        """.trimIndent()
+        val p = parseText(text)
+        assertEquals(3, p.questions.size)
+        assertEquals(listOf("A", "B", "C"), p.questions.map { it.answer })
+    }
+
+    @Test
+    fun parsesAnswerKeyInParentheses() {
+        val text = """
+            1.第一题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            2.第二题
+            A、选项一 B、选项二 C、选项三 D、选项四
+            答案：1（A）2（B）
+        """.trimIndent()
+        val p = parseText(text)
+        assertEquals(listOf("A", "B"), p.questions.map { it.answer })
+    }
 }
