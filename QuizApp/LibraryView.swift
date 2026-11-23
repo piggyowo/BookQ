@@ -99,6 +99,7 @@ struct LibraryView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .background(PaperBackground())
     }
 
     private var libraryHome: some View {
@@ -731,7 +732,7 @@ struct BankDetailView: View {
 
     var body: some View {
         ZStack {
-            Palette.paper.ignoresSafeArea()
+            PaperBackground()
             if let bank = store.bank(id: bankID) {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {

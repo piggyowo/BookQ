@@ -228,7 +228,7 @@ private fun SettingsHome(store: BookQStore, onOpen: (SettingsPage) -> Unit) {
                 icon = Icons.Outlined.Palette,
                 title = "关于 BookQ",
                 detail = "版本、主题与数据说明",
-                value = "0.1.7",
+                value = "0.1.8",
                 onClick = { onOpen(SettingsPage.ABOUT) }
             )
         }
@@ -477,7 +477,7 @@ private fun AboutSettings(store: BookQStore) {
     }
 
     SettingsGroup("应用") {
-        InfoRow(Icons.Outlined.Inventory2, "版本", "0.1.7")
+        InfoRow(Icons.Outlined.Inventory2, "版本", "0.1.8")
         SettingsDivider()
         InfoRow(Icons.Outlined.FileUpload, "题库", "全部由你导入")
         SettingsDivider()

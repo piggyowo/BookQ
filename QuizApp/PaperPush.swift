@@ -21,6 +21,7 @@ struct PaperPushModifier<Detail: View>: ViewModifier {
             let effective = progress * (1 - dragFraction)
 
             ZStack {
+                PaperBackground()
                 content
                     .scaleEffect(1 - 0.028 * effective, anchor: .leading)
                     .offset(x: -w * 0.14 * effective)

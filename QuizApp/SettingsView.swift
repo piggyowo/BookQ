@@ -173,7 +173,7 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.7"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.8"
     }
 
     // MARK: - 详情页
@@ -213,15 +213,19 @@ struct SettingsView: View {
         subtitle: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                detailHeader(title: title, subtitle: subtitle)
-                content()
+        ZStack {
+            PaperBackground()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    detailHeader(title: title, subtitle: subtitle)
+                    content()
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, 26)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 26)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func detailHeader(title: String, subtitle: String) -> some View {
